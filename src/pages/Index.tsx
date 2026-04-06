@@ -1,16 +1,63 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import { useState, useCallback } from "react";
+import UsernameScreen from "@/components/UsernameScreen";
+import SetupScreen from "@/components/SetupScreen";
+import QuizScreen from "@/components/QuizScreen";
+import ResultsScreen from "@/components/ResultsScreen";
+import {
+  type MathType, type Difficulty, type Grade,
+  type Question, generateQuestions,
+} from "@/data/mockData";
 
-// IMPORTANT: Fully REPLACE this with your own code
-const PlaceholderIndex = () => {
-  // PLACEHOLDER: Replace this entire return statement with the user's app.
-  // The inline background color is intentionally not part of the design system.
+type Screen = "username" | "setup" | "quiz" | "results";
+
+const Index = () => {
+  const [screen, setScreen] = useState<Screen>("username");
+  const [username, setUsername] = useState("");
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [answers, setAnswers] = useState<(string | null)[]>([]);
+  const [timeUsed, setTimeUsed] = useState(0);
+  const [config, setConfig] = useState<{ grade: Grade; mathType: MathType; difficulty: Difficulty } | null>(null);
+
+  const handleUsername = (name: string) => {
+    setUsername(name);
+    setScreen("setup");
+  };
+
+  const handleStart = (grade: Grade, mathType: MathType, difficulty: Difficulty) => {
+    setConfig({ grade, mathType, difficulty });
+    setQuestions(generateQuestions(mathType, difficulty, grade));
+    setScreen("quiz");
+  };
+
+  const handleFinish = useCallback((ans: (string | null)[], time: number) => {
+    setAnswers(ans);
+    setTimeUsed(time);
+    setScreen("results");
+  }, []);
+
+  const handleRedo = () => {
+    if (config) {
+      setQuestions(generateQuestions(config.mathType, config.difficulty, config.grade));
+      setScreen("quiz");
+    }
+  };
+
   return (
-    <div className="flex min-h-screen items-center justify-center" style={{ backgroundColor: '#fcfbf8' }}>
-      <img data-lovable-blank-page-placeholder="REMOVE_THIS" src="/placeholder.svg" alt="Your app will live here!" />
-    </div>
+    <>
+      {screen === "username" && <UsernameScreen onSubmit={handleUsername} />}
+      {screen === "setup" && <SetupScreen username={username} onStart={handleStart} />}
+      {screen === "quiz" && <QuizScreen questions={questions} onFinish={handleFinish} />}
+      {screen === "results" && (
+        <ResultsScreen
+          questions={questions}
+          answers={answers}
+          timeUsed={timeUsed}
+          onRedo={handleRedo}
+          onHome={() => setScreen("username")}
+        />
+      )}
+    </>
   );
 };
-
-const Index = PlaceholderIndex;
 
 export default Index;
