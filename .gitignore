@@ -1,0 +1,42 @@
+# ---------- node / js ----------
+node_modules/
+dist/
+dist-ssr/
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# ---------- python ----------
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+*.egg-info/
+.venv/
+venv/
+env/
+
+# ---------- environment / secrets ----------
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# ---------- editor / os ----------
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+*.swp
+*.swo
+
+# ---------- docker / data ----------
+# postgres_data volume is managed by docker; never commit a dumped copy
+postgres_data/

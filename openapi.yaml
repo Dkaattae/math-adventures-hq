@@ -1,0 +1,311 @@
+openapi: 3.1.0
+info:
+  title: Math Adventures HQ API
+  version: 0.1.0
+  description: |
+    Backend API for the Math Adventures HQ kids quiz app. Supports username
+    selection, quiz configuration and question generation, answer submission
+    with scoring, and a global leaderboard.
+servers:
+  - url: http://localhost:8080
+    description: Local development
+  - url: https://api.math-adventures-hq.example.com
+    description: Production
+
+tags:
+  - name: users
+  - name: quizzes
+  - name: leaderboard
+
+paths:
+  /api/users/check:
+    get:
+      tags: [users]
+      summary: Check if a username is already taken
+      parameters:
+        - in: query
+          name: username
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 20 }
+      responses:
+        "200":
+          description: Availability result
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [username, available]
+                properties:
+                  username: { type: string }
+                  available: { type: boolean }
+        "400": { $ref: "#/components/responses/BadRequest" }
+
+  /api/users:
+    post:
+      tags: [users]
+      summary: Create (or claim) a username for this player
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username]
+              properties:
+                username: { type: string, minLength: 1, maxLength: 20 }
+      responses:
+        "201":
+          description: User created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "409":
+          description: Username already taken
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /api/quizzes:
+    post:
+      tags: [quizzes]
+      summary: Start a new quiz — returns 10 generated questions
+      description: |
+        Creates a quiz session for the given player and configuration. The
+        server generates the 10 questions and returns them *without* the
+        correct answers. Correct answers are revealed only after submission
+        via `POST /api/quizzes/{quizId}/submit`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, grade, mathType, difficulty]
+              properties:
+                username: { type: string }
+                grade:      { $ref: "#/components/schemas/Grade" }
+                mathType:   { $ref: "#/components/schemas/MathType" }
+                difficulty: { $ref: "#/components/schemas/Difficulty" }
+      responses:
+        "201":
+          description: Quiz created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Quiz" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/quizzes/{quizId}:
+    get:
+      tags: [quizzes]
+      summary: Fetch an existing quiz (questions only, no answers)
+      parameters:
+        - $ref: "#/components/parameters/QuizId"
+      responses:
+        "200":
+          description: Quiz found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Quiz" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/quizzes/{quizId}/submit:
+    post:
+      tags: [quizzes]
+      summary: Submit answers and receive scored results
+      parameters:
+        - $ref: "#/components/parameters/QuizId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [answers, timeUsedSeconds]
+              properties:
+                answers:
+                  type: array
+                  minItems: 10
+                  maxItems: 10
+                  items:
+                    oneOf:
+                      - { type: string }
+                      - { type: "null" }
+                  description: Player answers in question order; null = skipped
+                timeUsedSeconds:
+                  type: integer
+                  minimum: 0
+                  description: Total seconds the player spent on the quiz
+      responses:
+        "200":
+          description: Scored result
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/QuizResult" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Quiz has already been submitted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /api/leaderboard:
+    get:
+      tags: [leaderboard]
+      summary: Get the top leaderboard entries
+      parameters:
+        - in: query
+          name: mathType
+          required: false
+          schema: { $ref: "#/components/schemas/MathType" }
+        - in: query
+          name: difficulty
+          required: false
+          schema: { $ref: "#/components/schemas/Difficulty" }
+        - in: query
+          name: grade
+          required: false
+          schema: { $ref: "#/components/schemas/Grade" }
+        - in: query
+          name: limit
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 100, default: 10 }
+      responses:
+        "200":
+          description: Leaderboard entries, highest score first (ties broken by time)
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/LeaderboardEntry" }
+
+components:
+  parameters:
+    QuizId:
+      in: path
+      name: quizId
+      required: true
+      schema: { type: string, format: uuid }
+
+  responses:
+    BadRequest:
+      description: Invalid request payload
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+  schemas:
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:    { type: string, example: invalid_request }
+        message: { type: string }
+        details:
+          type: object
+          additionalProperties: true
+
+    Grade:
+      type: string
+      enum: ["K", "1", "2", "3", "4", "5"]
+
+    MathType:
+      type: string
+      enum: [addition, subtraction, multiplication, division, algebra, geometry]
+
+    Difficulty:
+      type: string
+      enum: [easy, medium, hard]
+
+    User:
+      type: object
+      required: [username, createdAt]
+      properties:
+        username:  { type: string }
+        createdAt: { type: string, format: date-time }
+
+    Question:
+      type: object
+      required: [id, question]
+      properties:
+        id:       { type: integer, minimum: 0 }
+        question: { type: string, example: "7 + 5 = ?" }
+
+    QuestionResult:
+      allOf:
+        - $ref: "#/components/schemas/Question"
+        - type: object
+          required: [correctAnswer, explanation, userAnswer, isCorrect]
+          properties:
+            correctAnswer:
+              oneOf:
+                - { type: string }
+                - { type: number }
+            explanation: { type: string }
+            userAnswer:
+              oneOf:
+                - { type: string }
+                - { type: "null" }
+            isCorrect: { type: boolean }
+
+    Quiz:
+      type: object
+      required: [id, username, grade, mathType, difficulty, questions, createdAt]
+      properties:
+        id:         { type: string, format: uuid }
+        username:   { type: string }
+        grade:      { $ref: "#/components/schemas/Grade" }
+        mathType:   { $ref: "#/components/schemas/MathType" }
+        difficulty: { $ref: "#/components/schemas/Difficulty" }
+        questions:
+          type: array
+          minItems: 10
+          maxItems: 10
+          items: { $ref: "#/components/schemas/Question" }
+        createdAt: { type: string, format: date-time }
+
+    QuizResult:
+      type: object
+      required:
+        [quizId, username, score, total, timeUsedSeconds, results, submittedAt]
+      properties:
+        quizId:          { type: string, format: uuid }
+        username:        { type: string }
+        score:           { type: integer, minimum: 0, maximum: 10 }
+        total:           { type: integer, example: 10 }
+        timeUsedSeconds: { type: integer, minimum: 0 }
+        badge:
+          type: string
+          description: Optional emoji badge awarded for this score
+          example: "🏆"
+        results:
+          type: array
+          minItems: 10
+          maxItems: 10
+          items: { $ref: "#/components/schemas/QuestionResult" }
+        submittedAt: { type: string, format: date-time }
+
+    LeaderboardEntry:
+      type: object
+      required: [name, score, total, timeUsedSeconds]
+      properties:
+        name:            { type: string }
+        score:           { type: integer }
+        total:           { type: integer }
+        timeUsedSeconds: { type: integer }
+        time:
+          type: string
+          description: Human-readable time (e.g. "1m 20s")
+          example: "1m 20s"
+        badge:           { type: string, example: "🥈" }
+        mathType:   { $ref: "#/components/schemas/MathType" }
+        difficulty: { $ref: "#/components/schemas/Difficulty" }
+        grade:      { $ref: "#/components/schemas/Grade" }
+        achievedAt: { type: string, format: date-time }

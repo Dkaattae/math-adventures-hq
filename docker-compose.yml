@@ -1,0 +1,39 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: math-adventures-postgres
+    restart: unless-stopped
+    # Dev-only credentials. Postgres is never published to the host —
+    # only the `app` service reaches it over the compose network — so
+    # these are safe to commit. Replace via env vars for any real deploy.
+    environment:
+      POSTGRES_USER: math
+      POSTGRES_PASSWORD: math
+      POSTGRES_DB: math_adventures
+    # No published ports — only the `app` service talks to Postgres,
+    # over the compose network. Add `ports: ["5432:5432"]` back if you
+    # want to connect with psql from the host.
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U math -d math_adventures"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: math-adventures-app
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg://math:math@postgres:5432/math_adventures
+    ports:
+      - "8000:8000"
+
+volumes:
+  postgres_data:

@@ -1,0 +1,93 @@
+"""SQLAlchemy ORM models."""
+from __future__ import annotations
+
+from datetime import datetime, timezone
+from uuid import UUID, uuid4
+
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.types import CHAR, TypeDecorator
+
+from .db import Base
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+class GUID(TypeDecorator):
+    """Portable UUID — uses native UUID on Postgres, CHAR(36) elsewhere."""
+
+    impl = CHAR
+    cache_ok = True
+
+    def load_dialect_impl(self, dialect):
+        if dialect.name == "postgresql":
+            from sqlalchemy.dialects.postgresql import UUID as PG_UUID
+
+            return dialect.type_descriptor(PG_UUID(as_uuid=True))
+        return dialect.type_descriptor(CHAR(36))
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return None
+        if dialect.name == "postgresql":
+            return value if isinstance(value, UUID) else UUID(str(value))
+        return str(value)
+
+    def process_result_value(self, value, dialect):
+        if value is None:
+            return None
+        return value if isinstance(value, UUID) else UUID(str(value))
+
+
+class UserRow(Base):
+    __tablename__ = "users"
+    username: Mapped[str] = mapped_column(String(20), primary_key=True)
+    username_lower: Mapped[str] = mapped_column(String(20), unique=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+
+class QuizRow(Base):
+    __tablename__ = "quizzes"
+    id: Mapped[UUID] = mapped_column(GUID(), primary_key=True, default=uuid4)
+    username: Mapped[str] = mapped_column(String(20), ForeignKey("users.username"))
+    grade: Mapped[str] = mapped_column(String(2))
+    math_type: Mapped[str] = mapped_column(String(20))
+    difficulty: Mapped[str] = mapped_column(String(10))
+    # Stores full questions incl. correct answer + explanation.
+    questions_json: Mapped[list] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    submitted: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    result: Mapped["QuizResultRow | None"] = relationship(
+        back_populates="quiz", uselist=False, cascade="all, delete-orphan"
+    )
+
+
+class QuizResultRow(Base):
+    __tablename__ = "quiz_results"
+    quiz_id: Mapped[UUID] = mapped_column(GUID(), ForeignKey("quizzes.id"), primary_key=True)
+    username: Mapped[str] = mapped_column(String(20))
+    score: Mapped[int] = mapped_column(Integer)
+    total: Mapped[int] = mapped_column(Integer, default=10)
+    time_used_seconds: Mapped[int] = mapped_column(Integer)
+    badge: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    results_json: Mapped[list] = mapped_column(JSON)
+    submitted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+    quiz: Mapped[QuizRow] = relationship(back_populates="result")
+
+
+class LeaderboardRow(Base):
+    __tablename__ = "leaderboard"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(20), index=True)
+    score: Mapped[int] = mapped_column(Integer, index=True)
+    total: Mapped[int] = mapped_column(Integer, default=10)
+    time_used_seconds: Mapped[int] = mapped_column(Integer)
+    badge: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    math_type: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
+    difficulty: Mapped[str | None] = mapped_column(String(10), nullable=True, index=True)
+    grade: Mapped[str | None] = mapped_column(String(2), nullable=True, index=True)
+    achieved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)

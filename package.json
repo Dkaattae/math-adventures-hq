@@ -1,0 +1,19 @@
+{
+  "name": "math-adventures-hq",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Root workspace — runs frontend + backend together with concurrently.",
+  "scripts": {
+    "install:all": "cd frontend && npm install",
+    "dev": "concurrently -n backend,frontend -c blue,magenta \"npm:dev:backend\" \"npm:dev:frontend\"",
+    "dev:backend": "cd backend && uvicorn app.main:app --reload --host 0.0.0.0 --port 8000",
+    "dev:frontend": "cd frontend && npm run dev",
+    "build:frontend": "cd frontend && npm run build",
+    "test": "concurrently -n backend,frontend -c blue,magenta \"npm:test:backend\" \"npm:test:frontend\"",
+    "test:backend": "cd backend && python -m pytest -q",
+    "test:frontend": "cd frontend && npm test"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}
