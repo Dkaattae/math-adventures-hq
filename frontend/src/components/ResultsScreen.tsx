@@ -1,27 +1,21 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import confetti from "canvas-confetti";
-import type { Question } from "@/data/mockData";
+import type { QuizResult } from "@/lib/api";
 
 interface Props {
-  questions: Question[];
-  answers: (string | null)[];
-  timeUsed: number;
+  result: QuizResult;
   onRedo: () => void;
   onHome: () => void;
 }
 
-const ResultsScreen = ({ questions, answers, timeUsed, onRedo, onHome }: Props) => {
+const ResultsScreen = ({ result, onRedo, onHome }: Props) => {
   const [showExplanations, setShowExplanations] = useState(false);
 
-  const results = questions.map((q, i) => ({
-    ...q,
-    userAnswer: answers[i],
-    correct: answers[i] !== null && String(q.correctAnswer) === answers[i],
-  }));
-  const score = results.filter((r) => r.correct).length;
-  const mins = Math.floor(timeUsed / 60);
-  const secs = timeUsed % 60;
+  const results = result.results.map((r) => ({ ...r, correct: r.isCorrect }));
+  const score = result.score;
+  const mins = Math.floor(result.timeUsedSeconds / 60);
+  const secs = result.timeUsedSeconds % 60;
 
   useEffect(() => {
     if (score >= 7) {
@@ -42,7 +36,7 @@ const ResultsScreen = ({ questions, answers, timeUsed, onRedo, onHome }: Props) 
       >
         <p className="text-6xl mb-2">{score >= 9 ? "🏆" : score >= 7 ? "🌟" : score >= 5 ? "👍" : "💪"}</p>
         <h1 className="text-4xl font-heading font-bold">
-          {score}/10
+          {score}/{result.total}
         </h1>
         <p className="text-muted-foreground font-body mt-1">
           ⏱ {mins}m {secs.toString().padStart(2, "0")}s

@@ -3,58 +3,77 @@ import UsernameScreen from "@/components/UsernameScreen";
 import SetupScreen from "@/components/SetupScreen";
 import QuizScreen from "@/components/QuizScreen";
 import ResultsScreen from "@/components/ResultsScreen";
-import {
-  type MathType, type Difficulty, type Grade,
-  type Question, generateQuestions,
-} from "@/data/mockData";
+import type { MathType, Difficulty, Grade } from "@/data/quizConfig";
+import { createQuiz, submitQuiz, type Question, type QuizResult } from "@/lib/api";
 
-type Screen = "username" | "setup" | "quiz" | "results";
+type Screen = "username" | "setup" | "quiz" | "results" | "error";
 
 const Index = () => {
   const [screen, setScreen] = useState<Screen>("username");
   const [username, setUsername] = useState("");
+  const [quizId, setQuizId] = useState<string | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
-  const [answers, setAnswers] = useState<(string | null)[]>([]);
-  const [timeUsed, setTimeUsed] = useState(0);
+  const [quizResult, setQuizResult] = useState<QuizResult | null>(null);
   const [config, setConfig] = useState<{ grade: Grade; mathType: MathType; difficulty: Difficulty } | null>(null);
+  const [errorMessage, setErrorMessage] = useState("");
 
   const handleUsername = (name: string) => {
     setUsername(name);
     setScreen("setup");
   };
 
-  const handleStart = (grade: Grade, mathType: MathType, difficulty: Difficulty) => {
-    setConfig({ grade, mathType, difficulty });
-    setQuestions(generateQuestions(mathType, difficulty, grade));
-    setScreen("quiz");
+  const startQuiz = async (grade: Grade, mathType: MathType, difficulty: Difficulty) => {
+    try {
+      const quiz = await createQuiz({ username, grade, mathType, difficulty });
+      setConfig({ grade, mathType, difficulty });
+      setQuizId(quiz.id);
+      setQuestions(quiz.questions);
+      setScreen("quiz");
+    } catch {
+      setErrorMessage("Couldn't start a new quiz. Please check your connection and try again.");
+      setScreen("error");
+    }
   };
 
-  const handleFinish = useCallback((ans: (string | null)[], time: number) => {
-    setAnswers(ans);
-    setTimeUsed(time);
-    setScreen("results");
-  }, []);
+  const handleFinish = useCallback(async (answers: (string | null)[], timeUsed: number) => {
+    if (!quizId) return;
+    try {
+      const result = await submitQuiz(quizId, { answers, timeUsedSeconds: timeUsed });
+      setQuizResult(result);
+      setScreen("results");
+    } catch {
+      setErrorMessage("Couldn't submit your answers. Please check your connection and try again.");
+      setScreen("error");
+    }
+  }, [quizId]);
 
   const handleRedo = () => {
-    if (config) {
-      setQuestions(generateQuestions(config.mathType, config.difficulty, config.grade));
-      setScreen("quiz");
-    }
+    if (config) startQuiz(config.grade, config.mathType, config.difficulty);
   };
 
   return (
     <>
       {screen === "username" && <UsernameScreen onSubmit={handleUsername} />}
-      {screen === "setup" && <SetupScreen username={username} onStart={handleStart} />}
+      {screen === "setup" && <SetupScreen username={username} onStart={startQuiz} />}
       {screen === "quiz" && <QuizScreen questions={questions} onFinish={handleFinish} />}
-      {screen === "results" && (
+      {screen === "results" && quizResult && (
         <ResultsScreen
-          questions={questions}
-          answers={answers}
-          timeUsed={timeUsed}
+          result={quizResult}
           onRedo={handleRedo}
           onHome={() => setScreen("username")}
         />
+      )}
+      {screen === "error" && (
+        <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-6 text-center">
+          <p className="text-4xl">😵</p>
+          <p className="font-heading font-semibold text-lg">{errorMessage}</p>
+          <button
+            onClick={() => setScreen("username")}
+            className="px-6 py-3 rounded-2xl bg-primary text-primary-foreground font-heading font-bold"
+          >
+            🏠 Back Home
+          </button>
+        </div>
       )}
     </>
   );

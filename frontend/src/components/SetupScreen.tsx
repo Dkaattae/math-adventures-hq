@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import {
   type MathType, type Difficulty, type Grade,
   mathTypeLabels, difficultyConfig, encouragingMessages,
-} from "@/data/mockData";
+} from "@/data/quizConfig";
 
 interface Props {
   username: string;
@@ -11,7 +11,10 @@ interface Props {
 }
 
 const grades: Grade[] = ["K", "1", "2", "3", "4", "5"];
-const mathTypes: MathType[] = ["addition", "subtraction", "multiplication", "division", "algebra", "geometry"];
+const mathTypes: MathType[] = [
+  "addition", "subtraction", "multiplication", "division",
+  "algebra", "geometry", "fractions", "order_of_operations",
+];
 const difficulties: Difficulty[] = ["easy", "medium", "hard"];
 
 const SetupScreen = ({ username, onStart }: Props) => {

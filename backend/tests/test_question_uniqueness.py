@@ -17,6 +17,8 @@ ALL_TYPES = [
     MathType.division,
     MathType.algebra,
     MathType.geometry,
+    MathType.fractions,
+    MathType.order_of_operations,
 ]
 
 # (difficulty, grade) combos that have enough value-space for 10 uniques.
@@ -296,6 +298,105 @@ def test_addition_dedup_treats_commutative_pairs_as_same():
     rng2 = FixedRng([5, 3])
     sig2, *_ = _make_addition(rng2, 1, 10)
     assert sig1 == sig2
+
+
+def test_algebra_hard_grade4_introduces_two_step_equations():
+    """G4+/hard algebra should eventually produce an ax + b = c question."""
+    saw_two_step = False
+    for seed in range(30):
+        rng = random.Random(seed)
+        qs = generate_questions(MathType.algebra, Difficulty.hard, Grade.G4, rng=rng)
+        if any(re.match(r"^\d+x [+-] \d+ =", q.question) for q in qs):
+            saw_two_step = True
+            break
+    assert saw_two_step, "G4/hard algebra never produced a two-step equation"
+
+
+def test_algebra_two_step_answers_are_non_negative_integers():
+    from app.questions import _alg_two_step_minus, _alg_two_step_plus
+
+    rng = random.Random(0)
+    for _ in range(100):
+        for factory in (_alg_two_step_plus, _alg_two_step_minus):
+            _, _, answer, _ = factory(rng, 5, 32)
+            assert isinstance(answer, int) and answer >= 0
+
+
+def test_fractions_basic_tier_is_fraction_of_whole_only():
+    rng = random.Random(0)
+    for _ in range(10):
+        qs = generate_questions(MathType.fractions, Difficulty.easy, Grade.K, rng=rng)
+        for q in qs:
+            assert q.question.startswith("What is"), q.question
+
+
+def test_fractions_advanced_tier_unlocks_unlike_denominators_and_multiplication():
+    saw_unlike = False
+    saw_multiply = False
+    for seed in range(60):
+        rng = random.Random(seed)
+        qs = generate_questions(MathType.fractions, Difficulty.hard, Grade.G5, rng=rng)
+        for q in qs:
+            if "×" in q.question:
+                saw_multiply = True
+                continue
+            m = re.match(r"^\d+/(\d+) \+ \d+/(\d+) = \?", q.question)
+            if m and m.group(1) != m.group(2):
+                saw_unlike = True
+        if saw_unlike and saw_multiply:
+            break
+    assert saw_unlike, "G5/hard fractions never showed unlike-denominator addition"
+    assert saw_multiply, "G5/hard fractions never showed fraction multiplication"
+
+
+def test_fraction_answers_are_simplified():
+    from math import gcd
+
+    for seed in range(50):
+        rng = random.Random(seed)
+        qs = generate_questions(MathType.fractions, Difficulty.hard, Grade.G5, rng=rng)
+        for q in qs:
+            if not isinstance(q.correctAnswer, str) or "/" not in q.correctAnswer:
+                continue
+            num_s, den_s = q.correctAnswer.split("/")
+            assert gcd(int(num_s), int(den_s)) == 1, f"unsimplified fraction: {q.correctAnswer}"
+
+
+def test_order_of_operations_basic_tier_has_no_parentheses_or_three_terms():
+    rng = random.Random(0)
+    for _ in range(10):
+        qs = generate_questions(MathType.order_of_operations, Difficulty.easy, Grade.K, rng=rng)
+        for q in qs:
+            assert "(" not in q.question, q.question
+
+
+def test_order_of_operations_hard_grade4_unlocks_parentheses():
+    saw_parens = False
+    for seed in range(30):
+        rng = random.Random(seed)
+        qs = generate_questions(MathType.order_of_operations, Difficulty.hard, Grade.G4, rng=rng)
+        if any("(" in q.question for q in qs):
+            saw_parens = True
+            break
+    assert saw_parens, "G4/hard order_of_operations never produced a parenthesized expression"
+
+
+def test_order_of_operations_respects_precedence_not_left_to_right():
+    """Multiplication/division must bind before +/- in every generated question."""
+    for seed in range(20):
+        rng = random.Random(seed)
+        for difficulty in (Difficulty.easy, Difficulty.medium, Difficulty.hard):
+            qs = generate_questions(MathType.order_of_operations, difficulty, Grade.G5, rng=rng)
+            for q in qs:
+                m = re.match(r"^(\d+) \+ (\d+) × (\d+) = \?$", q.question)
+                if m:
+                    a, b, c = map(int, m.groups())
+                    assert q.correctAnswer == a + b * c
+
+                m = re.match(r"^(\d+) × (\d+) \+ (\d+) = \?$", q.question)
+                if m:
+                    a, b, c = map(int, m.groups())
+                    assert q.correctAnswer == a * b + c
 
 
 def test_small_space_falls_back_gracefully():
