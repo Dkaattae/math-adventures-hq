@@ -1,9 +1,11 @@
 # Math Adventures HQ
 
 A kids' math quiz web app. Players pick a grade (K–5), a math topic
-(addition, subtraction, multiplication, division, algebra, geometry),
-and a difficulty, then answer 10 auto-generated questions. Scores are
-persisted to a Postgres-backed leaderboard.
+(addition, subtraction, multiplication, division, algebra, geometry,
+fractions, order of operations, word problems, comparing numbers,
+money & time, decimals, percentages, measurement), and a difficulty,
+then answer 10 auto-generated questions. Scores are persisted to a
+Postgres-backed leaderboard.
 
 ## Stack
 

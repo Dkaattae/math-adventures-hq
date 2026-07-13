@@ -10,7 +10,13 @@ export type MathType =
   | "algebra"
   | "geometry"
   | "fractions"
-  | "order_of_operations";
+  | "order_of_operations"
+  | "word_problems"
+  | "comparison"
+  | "money_time"
+  | "decimals"
+  | "percentages"
+  | "measurement";
 export type Difficulty = "easy" | "medium" | "hard";
 export type Grade = "K" | "1" | "2" | "3" | "4" | "5";
 
@@ -31,6 +37,12 @@ export const mathTypeLabels: Record<MathType, { label: string; emoji: string }> 
   geometry: { label: "Geometry", emoji: "📐" },
   fractions: { label: "Fractions", emoji: "🍕" },
   order_of_operations: { label: "Order of Ops", emoji: "🧮" },
+  word_problems: { label: "Word Problems", emoji: "📖" },
+  comparison: { label: "Comparing", emoji: "⚖️" },
+  money_time: { label: "Money & Time", emoji: "💰" },
+  decimals: { label: "Decimals", emoji: "🔢" },
+  percentages: { label: "Percentages", emoji: "💯" },
+  measurement: { label: "Measurement", emoji: "📏" },
 };
 
 export const difficultyConfig: Record<Difficulty, { label: string; emoji: string; color: string }> = {

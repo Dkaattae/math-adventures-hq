@@ -487,6 +487,456 @@ def _make_ooo_advanced(rng: random.Random, lo: int, hi: int):
     return rng.choice([_ooo_sub_mul, _ooo_div_add, _ooo_three_terms, _ooo_parens])(rng, lo, hi)
 
 
+# ---------- word problems: arithmetic wrapped in short stories ----------
+#
+# The numbers (not the names/items) form the dedup signature, so a retry
+# after a collision redraws the numbers rather than just the character.
+
+_WP_NAMES = ["Maya", "Leo", "Ava", "Noah", "Zoe", "Sam", "Mia", "Eli", "Ruby", "Max"]
+_WP_ITEMS = ["stickers", "marbles", "crayons", "apples", "cookies", "toy cars", "seashells", "balloons"]
+
+
+def _wp_add(rng: random.Random, lo: int, hi: int):
+    a, b = rng.randint(lo, hi), rng.randint(lo, hi)
+    name, item = rng.choice(_WP_NAMES), rng.choice(_WP_ITEMS)
+    lo_, hi_ = (a, b) if a <= b else (b, a)
+    return (
+        ("wp_add", lo_, hi_),
+        f"{name} has {a} {item} and gets {b} more. How many {item} does {name} have now?",
+        a + b,
+        f"{a} + {b} = {a + b}. Count on {b} more from {a}! 📖",
+    )
+
+
+def _wp_sub(rng: random.Random, lo: int, hi: int):
+    a = rng.randint(lo, hi)
+    b = rng.randint(lo, min(a, hi))
+    name, item = rng.choice(_WP_NAMES), rng.choice(_WP_ITEMS)
+    return (
+        ("wp_sub", a, b),
+        f"{name} has {a} {item} and gives {b} to a friend. How many {item} does {name} have left?",
+        a - b,
+        f"{a} - {b} = {a - b}. Take away {b} from {a}! 📖",
+    )
+
+
+def _wp_mul(rng: random.Random, lo: int, hi: int):
+    a = rng.randint(2, max(3, hi // 3))
+    b = rng.randint(2, max(3, hi // 2))
+    item = rng.choice(_WP_ITEMS)
+    return (
+        ("wp_mul", a, b),
+        f"There are {a} bags with {b} {item} in each bag. How many {item} are there in all?",
+        a * b,
+        f"{a} bags × {b} each = {a * b}. That's {a} groups of {b}! 📖",
+    )
+
+
+def _wp_div(rng: random.Random, lo: int, hi: int):
+    divisor = rng.randint(2, max(3, hi // 3))
+    answer = rng.randint(2, max(3, hi // 2))
+    dividend = divisor * answer
+    name, item = rng.choice(_WP_NAMES), rng.choice(_WP_ITEMS)
+    return (
+        ("wp_div", dividend, divisor),
+        f"{name} shares {dividend} {item} equally among {divisor} friends. "
+        f"How many does each friend get?",
+        answer,
+        f"{dividend} ÷ {divisor} = {answer}. Everyone gets a fair share! 📖",
+    )
+
+
+def _make_word_problems_basic(rng: random.Random, lo: int, hi: int):
+    return rng.choice([_wp_add, _wp_sub])(rng, lo, hi)
+
+
+def _make_word_problems_intermediate(rng: random.Random, lo: int, hi: int):
+    return rng.choice([_wp_add, _wp_sub, _wp_mul])(rng, lo, hi)
+
+
+def _make_word_problems_advanced(rng: random.Random, lo: int, hi: int):
+    return rng.choice([_wp_add, _wp_sub, _wp_mul, _wp_div])(rng, lo, hi)
+
+
+# ---------- comparison & number sense ----------
+
+
+def _cmp_symbol(rng: random.Random, lo: int, hi: int):
+    a = rng.randint(lo, hi)
+    # 1-in-5 chance of equality so "=" answers actually appear.
+    b = a if rng.random() < 0.2 else rng.randint(lo, hi)
+    answer = "<" if a < b else (">" if a > b else "=")
+    return (
+        ("cmp", a, b),
+        f"Fill in the blank: {a} _ {b} (write <, > or =)",
+        answer,
+        f"{a} {answer} {b}. The open side of < and > always faces the bigger number! ⚖️",
+    )
+
+
+def _cmp_biggest(rng: random.Random, lo: int, hi: int):
+    nums = rng.sample(range(lo, hi + 10), 3)
+    answer = max(nums)
+    return (
+        ("cmpbig", *sorted(nums)),
+        f"Which number is the biggest: {nums[0]}, {nums[1]} or {nums[2]}?",
+        answer,
+        f"{answer} is bigger than the other two! ⚖️",
+    )
+
+
+def _even_odd(rng: random.Random, lo: int, hi: int):
+    n = rng.randint(1, max(10, hi * 3))
+    answer = "even" if n % 2 == 0 else "odd"
+    return (
+        ("evenodd", n),
+        f"Is {n} even or odd?",
+        answer,
+        f"{n} is {answer} — even numbers end in 0, 2, 4, 6 or 8! 🔍",
+    )
+
+
+def _sequence_next(rng: random.Random, lo: int, hi: int):
+    start = rng.randint(lo, hi)
+    step = rng.randint(2, 5)
+    a, b, c = start, start + step, start + 2 * step
+    return (
+        ("seq", start, step),
+        f"What number comes next: {a}, {b}, {c}, ?",
+        c + step,
+        f"The pattern adds {step} each time: {c} + {step} = {c + step}! 🔁",
+    )
+
+
+def _place_value(rng: random.Random, lo: int, hi: int):
+    n = rng.randint(100, 999)
+    place, digit = rng.choice(
+        [("hundreds", n // 100), ("tens", (n // 10) % 10), ("ones", n % 10)]
+    )
+    return (
+        ("place", n, place),
+        f"In the number {n}, which digit is in the {place} place?",
+        digit,
+        f"In {n}, the {place} digit is {digit}! 🏷️",
+    )
+
+
+def _round_to_ten(rng: random.Random, lo: int, hi: int):
+    n = rng.randint(11, max(99, hi * 5))
+    if n % 10 == 0:
+        n += rng.randint(1, 9)
+    answer = ((n + 5) // 10) * 10
+    return (
+        ("round10", n),
+        f"Round {n} to the nearest 10.",
+        answer,
+        f"{n} is closest to {answer}. Look at the ones digit: 5 or more rounds up! 🎯",
+    )
+
+
+def _make_comparison_basic(rng: random.Random, lo: int, hi: int):
+    return rng.choice([_cmp_symbol, _even_odd, _sequence_next])(rng, lo, hi)
+
+
+def _make_comparison_intermediate(rng: random.Random, lo: int, hi: int):
+    return rng.choice(
+        [_cmp_symbol, _even_odd, _sequence_next, _cmp_biggest, _place_value]
+    )(rng, lo, hi)
+
+
+def _make_comparison_advanced(rng: random.Random, lo: int, hi: int):
+    return rng.choice(
+        [_cmp_symbol, _sequence_next, _cmp_biggest, _place_value, _round_to_ten]
+    )(rng, lo, hi)
+
+
+# ---------- money & time ----------
+#
+# Money stays in whole cents so kids never have to type a decimal point.
+
+_COINS = [("quarter", "quarters", 25), ("dime", "dimes", 10), ("nickel", "nickels", 5), ("penny", "pennies", 1)]
+
+
+def _money_coins(rng: random.Random, lo: int, hi: int, *, coin_pool: slice = slice(1, 4)):
+    # Two distinct coin types with small counts.
+    pool = _COINS[coin_pool]
+    (name1, plural1, val1), (name2, plural2, val2) = rng.sample(pool, 2)
+    c1, c2 = rng.randint(1, 4), rng.randint(1, 4)
+    total = c1 * val1 + c2 * val2
+    w1 = name1 if c1 == 1 else plural1
+    w2 = name2 if c2 == 1 else plural2
+    return (
+        ("coins", val1, c1, val2, c2),
+        f"You have {c1} {w1} and {c2} {w2}. How many cents is that?",
+        total,
+        f"{c1} × {val1}¢ + {c2} × {val2}¢ = {total}¢! 💰",
+    )
+
+
+def _money_coins_easy(rng: random.Random, lo: int, hi: int):
+    return _money_coins(rng, lo, hi, coin_pool=slice(1, 4))  # dimes/nickels/pennies
+
+
+def _money_coins_full(rng: random.Random, lo: int, hi: int):
+    return _money_coins(rng, lo, hi, coin_pool=slice(0, 4))  # quarters too
+
+
+def _money_change(rng: random.Random, lo: int, hi: int):
+    paid = rng.choice([25, 50, 100])
+    price = rng.randint(1, paid - 1)
+    return (
+        ("change", price, paid),
+        f"A sticker costs {price}¢ and you pay {paid}¢. How many cents of change do you get?",
+        paid - price,
+        f"{paid}¢ - {price}¢ = {paid - price}¢ change! 💰",
+    )
+
+
+def _time_hours_to_minutes(rng: random.Random, lo: int, hi: int):
+    h = rng.randint(2, 9)
+    return (
+        ("h2m", h),
+        f"How many minutes are in {h} hours?",
+        h * 60,
+        f"Each hour has 60 minutes: {h} × 60 = {h * 60}! ⏰",
+    )
+
+
+def _time_to_next_hour(rng: random.Random, lo: int, hi: int):
+    h = rng.randint(1, 11)
+    m = rng.choice([5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55])
+    return (
+        ("tonext", h, m),
+        f"How many minutes is it from {h}:{m:02d} to {h + 1}:00?",
+        60 - m,
+        f"From {h}:{m:02d} up to {h + 1}:00 is 60 - {m} = {60 - m} minutes! ⏰",
+    )
+
+
+def _time_elapsed(rng: random.Random, lo: int, hi: int):
+    h1 = rng.randint(1, 9)
+    m1 = rng.choice([0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55])
+    hours = rng.randint(1, 2)
+    m2 = rng.choice([0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55])
+    h2 = h1 + hours
+    answer = hours * 60 + (m2 - m1)
+    return (
+        ("elapsed", h1, m1, h2, m2),
+        f"How many minutes is it from {h1}:{m1:02d} to {h2}:{m2:02d}?",
+        answer,
+        f"From {h1}:{m1:02d} to {h2}:{m2:02d} is {answer} minutes. "
+        f"Count the full hours first, then the extra minutes! ⏰",
+    )
+
+
+def _make_money_time_basic(rng: random.Random, lo: int, hi: int):
+    return rng.choice([_money_coins_easy, _time_hours_to_minutes])(rng, lo, hi)
+
+
+def _make_money_time_intermediate(rng: random.Random, lo: int, hi: int):
+    return rng.choice(
+        [_money_coins_easy, _money_change, _time_hours_to_minutes, _time_to_next_hour]
+    )(rng, lo, hi)
+
+
+def _make_money_time_advanced(rng: random.Random, lo: int, hi: int):
+    return rng.choice(
+        [_money_coins_full, _money_change, _time_to_next_hour, _time_elapsed]
+    )(rng, lo, hi)
+
+
+# ---------- decimals: exact arithmetic in integer tenths/hundredths ----------
+
+
+def _fmt_tenths(v: int) -> str:
+    return f"{v // 10}.{v % 10}"
+
+
+def _fmt_hundredths(v: int) -> str:
+    return f"{v // 100}.{v % 100:02d}"
+
+
+def _dec_add_tenths(rng: random.Random, lo: int, hi: int):
+    a, b = rng.randint(1, 9), rng.randint(1, 9)
+    lo_, hi_ = (a, b) if a <= b else (b, a)
+    return (
+        ("decadd", lo_, hi_),
+        f"{_fmt_tenths(a)} + {_fmt_tenths(b)} = ?",
+        _fmt_tenths(a + b),
+        f"{a} tenths + {b} tenths = {a + b} tenths = {_fmt_tenths(a + b)}! 🔢",
+    )
+
+
+def _dec_sub_tenths(rng: random.Random, lo: int, hi: int):
+    a = rng.randint(2, 18)
+    b = rng.randint(1, min(a, 9))
+    return (
+        ("decsub", a, b),
+        f"{_fmt_tenths(a)} - {_fmt_tenths(b)} = ?",
+        _fmt_tenths(a - b),
+        f"{a} tenths - {b} tenths = {a - b} tenths = {_fmt_tenths(a - b)}! 🔢",
+    )
+
+
+def _dec_add_hundredths(rng: random.Random, lo: int, hi: int):
+    a, b = rng.randint(5, 395), rng.randint(5, 395)
+    lo_, hi_ = (a, b) if a <= b else (b, a)
+    return (
+        ("decadd100", lo_, hi_),
+        f"{_fmt_hundredths(a)} + {_fmt_hundredths(b)} = ?",
+        _fmt_hundredths(a + b),
+        f"Line up the decimal points: {_fmt_hundredths(a)} + {_fmt_hundredths(b)} "
+        f"= {_fmt_hundredths(a + b)}! 🔢",
+    )
+
+
+def _dec_compare(rng: random.Random, lo: int, hi: int):
+    # Same whole part, different fractional parts — the classic 0.7 vs 0.65 trap.
+    whole = rng.randint(0, 5)
+    t = rng.randint(1, 9)
+    h = rng.randint(1, 99)
+    if h == t * 10:
+        h += 1
+    a = whole * 10 + t          # tenths
+    b = whole * 100 + h         # hundredths
+    a_str, b_str = _fmt_tenths(a), _fmt_hundredths(b)
+    answer = a_str if t * 10 > h else b_str
+    return (
+        ("deccmp", a, b),
+        f"Which is bigger: {a_str} or {b_str}?",
+        answer,
+        f"Compare place by place: {a_str} is {t * 10} hundredths, {b_str} is {h} hundredths — "
+        f"so {answer} is bigger! 🔢",
+    )
+
+
+def _dec_times_ten(rng: random.Random, lo: int, hi: int):
+    v = rng.randint(1, 99)
+    if v % 10 == 0:
+        v += 1
+    return (
+        ("dec10", v),
+        f"What is {_fmt_tenths(v)} × 10?",
+        v,
+        f"Multiplying by 10 moves the decimal point one place right: {_fmt_tenths(v)} × 10 = {v}! 🔢",
+    )
+
+
+def _make_decimals_basic(rng: random.Random, lo: int, hi: int):
+    return rng.choice([_dec_add_tenths, _dec_sub_tenths])(rng, lo, hi)
+
+
+def _make_decimals_advanced(rng: random.Random, lo: int, hi: int):
+    return rng.choice(
+        [_dec_add_tenths, _dec_sub_tenths, _dec_add_hundredths, _dec_compare, _dec_times_ten]
+    )(rng, lo, hi)
+
+
+# ---------- percentages: percent of a number, always whole answers ----------
+
+# (percent, required multiple) — n is drawn as a multiple so the answer is whole.
+_PCT_BASIC = [(50, 2), (10, 10), (100, 1)]
+_PCT_FULL = _PCT_BASIC + [(25, 4), (20, 5), (75, 4)]
+
+
+def _pct_of(rng: random.Random, lo: int, hi: int, *, table: list[tuple[int, int]]):
+    pct, multiple = rng.choice(table)
+    n = multiple * rng.randint(1, max(10, hi))
+    answer = pct * n // 100
+    return (
+        ("pct", pct, n),
+        f"What is {pct}% of {n}?",
+        answer,
+        f"{pct}% means {pct} out of every 100: {pct}% of {n} = {answer}! 💯",
+    )
+
+
+def _make_percentages_basic(rng: random.Random, lo: int, hi: int):
+    return _pct_of(rng, lo, hi, table=_PCT_BASIC)
+
+
+def _make_percentages_advanced(rng: random.Random, lo: int, hi: int):
+    return _pct_of(rng, lo, hi, table=_PCT_FULL)
+
+
+# ---------- measurement conversions ----------
+
+# (factor, small unit plural, big unit singular, big unit plural)
+_CONVERSIONS_BASIC = [
+    (100, "centimeters", "meter", "meters"),
+    (10, "millimeters", "centimeter", "centimeters"),
+    (60, "seconds", "minute", "minutes"),
+    (12, "inches", "foot", "feet"),
+]
+_CONVERSIONS_FULL = _CONVERSIONS_BASIC + [
+    (1000, "meters", "kilometer", "kilometers"),
+    (1000, "grams", "kilogram", "kilograms"),
+    (1000, "milliliters", "liter", "liters"),
+    (3, "feet", "yard", "yards"),
+]
+
+
+def _meas_big_to_small(rng: random.Random, lo: int, hi: int, *, table: list):
+    factor, small, big_one, big_many = rng.choice(table)
+    k = rng.randint(2, 9)
+    return (
+        ("meas", factor, small, k),
+        f"How many {small} are in {k} {big_many}?",
+        k * factor,
+        f"1 {big_one} = {factor} {small}, so {k} {big_many} = {k} × {factor} = {k * factor}! 📏",
+    )
+
+
+def _meas_small_to_big(rng: random.Random, lo: int, hi: int):
+    factor, small, big_one, big_many = rng.choice(_CONVERSIONS_FULL)
+    k = rng.randint(2, 9)
+    total = k * factor
+    return (
+        ("measrev", factor, small, k),
+        f"{total} {small} is how many {big_many}?",
+        k,
+        f"Divide by {factor}: {total} ÷ {factor} = {k} {big_many}! 📏",
+    )
+
+
+def _meas_mixed(rng: random.Random, lo: int, hi: int):
+    factor, small, big_one, big_many = rng.choice(
+        [c for c in _CONVERSIONS_FULL if c[0] in (100, 60, 12)]
+    )
+    k = rng.randint(1, 5)
+    extra = rng.randint(1, factor - 1)
+    big_word = big_one if k == 1 else big_many
+    return (
+        ("measmix", factor, small, k, extra),
+        f"How many {small} is {k} {big_word} and {extra} {small}?",
+        k * factor + extra,
+        f"{k} × {factor} = {k * factor}, plus {extra} more = {k * factor + extra}! 📏",
+    )
+
+
+def _make_measurement_basic(rng: random.Random, lo: int, hi: int):
+    return _meas_big_to_small(rng, lo, hi, table=_CONVERSIONS_BASIC)
+
+
+def _make_measurement_intermediate(rng: random.Random, lo: int, hi: int):
+    return rng.choice(
+        [
+            lambda r, a, b: _meas_big_to_small(r, a, b, table=_CONVERSIONS_FULL),
+            _meas_small_to_big,
+        ]
+    )(rng, lo, hi)
+
+
+def _make_measurement_advanced(rng: random.Random, lo: int, hi: int):
+    return rng.choice(
+        [
+            lambda r, a, b: _meas_big_to_small(r, a, b, table=_CONVERSIONS_FULL),
+            _meas_small_to_big,
+            _meas_mixed,
+        ]
+    )(rng, lo, hi)
+
+
 # ---------- geometry: sample from curated pools by difficulty ----------
 #
 # Three tiers:
@@ -696,6 +1146,18 @@ def _pick_factory(math_type: MathType, difficulty: Difficulty, grade: Grade) -> 
       denominators and multiplication unlock at grade 4+ hard.
     - Order of operations: two-term problems only below grade 3/medium;
       parentheses and three-term expressions unlock at grade 4+ hard.
+    - Word problems: add/sub stories at first; multiplication joins at
+      grade 2+ medium, division at grade 3+ hard.
+    - Comparison: symbol/even-odd/sequences at first; place value at
+      grade 2+ medium; rounding at grade 3+ hard.
+    - Money & time: coin counting and hours→minutes at first; change and
+      to-the-next-hour at grade 2+ medium; quarters and cross-hour
+      elapsed time at grade 3+ hard.
+    - Decimals: tenths add/sub at first; hundredths, comparison, and
+      ×10 at grade 4+ hard.
+    - Percentages: 10/50/100% at first; 20/25/75% at grade 5 hard.
+    - Measurement: big→small conversions at first; reverse direction at
+      grade 3+ medium; mixed units at grade 4+ hard.
     - Other types use a single factory regardless of difficulty.
     """
     g = 0 if grade == Grade.K else int(grade.value)
@@ -730,6 +1192,44 @@ def _pick_factory(math_type: MathType, difficulty: Difficulty, grade: Grade) -> 
         if g >= 3 and difficulty != Difficulty.easy:
             return _make_ooo_intermediate
         return _make_ooo_basic
+
+    if math_type == MathType.word_problems:
+        if difficulty == Difficulty.hard and g >= 3:
+            return _make_word_problems_advanced
+        if g >= 2 and difficulty != Difficulty.easy:
+            return _make_word_problems_intermediate
+        return _make_word_problems_basic
+
+    if math_type == MathType.comparison:
+        if difficulty == Difficulty.hard and g >= 3:
+            return _make_comparison_advanced
+        if g >= 2 and difficulty != Difficulty.easy:
+            return _make_comparison_intermediate
+        return _make_comparison_basic
+
+    if math_type == MathType.money_time:
+        if difficulty == Difficulty.hard and g >= 3:
+            return _make_money_time_advanced
+        if g >= 2 and difficulty != Difficulty.easy:
+            return _make_money_time_intermediate
+        return _make_money_time_basic
+
+    if math_type == MathType.decimals:
+        if difficulty == Difficulty.hard and g >= 4:
+            return _make_decimals_advanced
+        return _make_decimals_basic
+
+    if math_type == MathType.percentages:
+        if difficulty == Difficulty.hard and g >= 5:
+            return _make_percentages_advanced
+        return _make_percentages_basic
+
+    if math_type == MathType.measurement:
+        if difficulty == Difficulty.hard and g >= 4:
+            return _make_measurement_advanced
+        if g >= 3 and difficulty != Difficulty.easy:
+            return _make_measurement_intermediate
+        return _make_measurement_basic
 
     return {
         MathType.addition: _make_addition,
@@ -778,7 +1278,22 @@ def generate_questions(
     return questions
 
 
+def _parse_number(s: str) -> float | None:
+    try:
+        return float(s)
+    except ValueError:
+        return None
+
+
 def grade_answer(correct: int | str, user: str | None) -> bool:
+    """Compare a typed answer against the key.
+
+    Numeric answers are compared as numbers so "0.50", ".5", and "0.5"
+    all match a correct answer of 0.5 (kids type trailing zeros).
+    Fraction answers ("3/4") stay exact string matches on purpose — the
+    question asks for simplest form, so "6/8" must NOT be accepted.
+    Word answers ("even", "triangle") are case-insensitive.
+    """
     if user is None:
         return False
     user_stripped = user.strip()
@@ -788,5 +1303,14 @@ def grade_answer(correct: int | str, user: str | None) -> bool:
         try:
             return int(user_stripped) == correct
         except ValueError:
-            return False
-    return user_stripped.lower() == str(correct).strip().lower()
+            user_num = _parse_number(user_stripped)
+            return user_num is not None and user_num == correct
+    correct_stripped = str(correct).strip()
+    if user_stripped.lower() == correct_stripped.lower():
+        return True
+    if "/" not in correct_stripped:
+        correct_num = _parse_number(correct_stripped)
+        user_num = _parse_number(user_stripped)
+        if correct_num is not None and user_num is not None:
+            return correct_num == user_num
+    return False

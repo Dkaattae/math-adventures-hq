@@ -29,6 +29,12 @@ class MathType(str, Enum):
     geometry = "geometry"
     fractions = "fractions"
     order_of_operations = "order_of_operations"
+    word_problems = "word_problems"
+    comparison = "comparison"
+    money_time = "money_time"
+    decimals = "decimals"
+    percentages = "percentages"
+    measurement = "measurement"
 
 
 class Difficulty(str, Enum):
