@@ -22,7 +22,10 @@ const UsernameScreen = ({ onSubmit }: Props) => {
       onSubmit(trimmed);
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
-        setError("Oops! That name is taken. Try adding your last name or a lucky number 😊");
+        // The name already exists. There are no accounts or passwords,
+        // so treat this as a returning player instead of locking the
+        // name away forever.
+        onSubmit(trimmed);
       } else if (err instanceof ApiError && err.status === 422) {
         setError("Names can be at most 20 characters. Try a shorter one! ✂️");
       } else {

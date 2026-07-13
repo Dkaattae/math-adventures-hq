@@ -1,41 +1,15 @@
 # Math Adventures HQ — Project Plan
 
-_Last updated: 2026-07-12_
+_Last updated: 2026-07-13_
 
 This document collects the roadmap for expanding the quiz, the known bugs
 and rough edges found while auditing the codebase, the testing gaps, and
 general improvement ideas — roughly in the order they're worth tackling.
-
-Context: PR #1 added two new question types (`fractions`,
-`order_of_operations`), two-step algebra at grade 4+ hard, and rewired the
-frontend from the leftover `mockData.ts` to the real FastAPI backend.
-Everything below assumes that work as the baseline.
+Completed work moves to the **Done** section at the bottom.
 
 ---
 
 ## 1. Expanding the quiz
-
-### Near term — new question types (reuse the existing factory pattern)
-
-Each of these fits the `Factory` pattern in `backend/app/questions.py`
-(signature + question text + answer + kid-friendly explanation), so they're
-mostly self-contained additions plus a `MathType` enum entry in
-`models.py` / `openapi.yaml` / `quizConfig.ts`:
-
-- **Word problems** — wrap existing arithmetic in sentence templates
-  ("Maya has 7 stickers and buys 5 more…"). Could be a standalone type or
-  a "story mode" toggle that applies to any arithmetic type.
-- **Comparison & number sense** — `<`, `>`, `=` between expressions;
-  rounding to the nearest 10/100; place value ("What digit is in the tens
-  place of 347?"); even/odd; skip counting and sequences ("2, 4, 6, ?").
-- **Money & time** — coin/bill totals, making change; reading clocks and
-  elapsed time ("How many minutes from 3:15 to 4:00?"). High curriculum
-  value for grades 1–3.
-- **Decimal arithmetic** (grades 4–5) — add/subtract tenths and
-  hundredths; extends the existing `_DECIMAL_CASES` idea.
-- **Percentages** (grade 5 hard) — "What is 25% of 40?"; can reuse the
-  fraction-of-a-whole machinery.
-- **Measurement conversions** — cm↔m, minutes↔hours, etc.
 
 ### Mid term — product features
 
@@ -72,43 +46,19 @@ mostly self-contained additions plus a `MathType` enum entry in
 ## 2. Known bugs & issues
 
 Found while auditing the current code; ordered by user impact.
+(Items 1–4, 7 and 9 from the original audit are fixed — see Done.)
 
-1. **Total quiz timer can be paused by typing**
-   (`frontend/src/components/QuizScreen.tsx`). The 3-minute countdown's
-   `useEffect` depends on `finish`, and `finish` is recreated on every
-   keystroke (`inputVal` is in its dependency list) — each keystroke tears
-   down and recreates the 1-second interval, so continuous typing stops
-   the clock. Fix: compute remaining time from a fixed deadline timestamp
-   instead of decrementing state, or move the timer into an effect with
-   stable dependencies.
-2. **Per-question timer expiry on the last question does nothing.**
-   `goNext()` no-ops at question 10, so the quiz just sits there until the
-   total timer runs out. Expiry on the last question should auto-finish.
-3. **Per-question timer expiry discards a typed-but-unsubmitted answer.**
-   `goNext()` advances without saving `inputVal` (unlike `finish()`, which
-   does salvage it). Save the draft answer before advancing.
-4. **Returning players can't come back.** `POST /api/users` returns 409
-   for an existing name and the UI tells the kid the name is taken — but
-   there are no accounts, so a returning player permanently loses their
-   name. Simplest fix given no auth: treat an existing username as
-   "welcome back" and continue; better fix: a PIN.
-5. **Client-reported quiz time is trusted.** `timeUsedSeconds` comes from
+1. **Client-reported quiz time is trusted.** `timeUsedSeconds` comes from
    the browser and the leaderboard ranks by it (score desc, time asc), so
    it's trivially spoofable. The server knows `createdAt` and
    `submittedAt` — clamp the reported time to that window.
-6. **`GET /api/users/check` is dead code** — implemented and tested on the
+2. **`GET /api/users/check` is dead code** — implemented and tested on the
    backend but never called by the frontend. Either use it for live
    availability feedback while typing, or remove it.
-7. **Answer grading is strict about formats.** `grade_answer` rejects
-   `0.50` for `0.5` and `.5` for `0.5`; kids will hit this. Numeric
-   answers should be compared numerically after parsing, keeping the
-   "simplest form" requirement only for fractions.
-8. **sqlite dev runs return timezone-naive datetimes** while Postgres
+3. **sqlite dev runs return timezone-naive datetimes** while Postgres
    returns aware ones (`DateTime(timezone=True)` is a no-op on sqlite).
    Normalize to UTC in the storage layer if sqlite stays a supported dev
    path.
-9. **README is stale** — it lists six topics; there are now eight. Worth a
-   pass after each feature lands (this file included).
 
 ---
 
@@ -119,13 +69,13 @@ Found while auditing the current code; ordered by user impact.
 - **API-level coverage for new types.** Existing tests call
   `generate_questions()` directly; only `addition` is exercised through
   `POST /api/quizzes` → submit. Add a parametrized round-trip test across
-  all eight `MathType`s.
+  all fourteen `MathType`s.
 - **Property-based answer verification.** For every arithmetic factory,
   independently re-evaluate the generated question text and assert it
   equals `correctAnswer` (catches template/answer drift — the class of bug
   most likely to sneak in as factories multiply). `hypothesis` fits well.
-- **`grade_answer` table tests** for the formats kids actually type:
-  trailing zeros, leading dots, spaces around `/`, negative numbers.
+  (Regex-based recomputation tests exist for the six newest types; the
+  original arithmetic types and a property-based framework are still open.)
 - **Leaderboard tie-breaking** — score-desc/time-asc ordering is only
   partially covered.
 - **Double-submit race** — the `submitted` flag is checked and set in
@@ -134,10 +84,9 @@ Found while auditing the current code; ordered by user impact.
 
 ### Frontend
 
-- **Component tests** (React Testing Library is already installed):
-  QuizScreen timer behavior (the bugs in §2 would all have been caught),
-  flag/review panel navigation, ResultsScreen rendering from a
-  `QuizResult` fixture.
+- **More component tests** — QuizScreen timers and UsernameScreen are
+  covered now; still missing: flag/review panel navigation, ResultsScreen
+  rendering from a `QuizResult` fixture, SetupScreen selection flow.
 - **Flow-level test with a mocked API** (MSW): username → setup → quiz →
   results against canned responses.
 - **Automated Playwright smoke test** — the full flow has been verified
@@ -158,9 +107,10 @@ Found while auditing the current code; ordered by user impact.
   hand-maintained copies — `openapi.yaml`, `models.py`, and
   `frontend/src/lib/api.ts` — which is exactly how the frontend drifted
   onto mock data unnoticed.
-- **Split `questions.py`** (~900 lines and growing) into a package:
+- **Split `questions.py`** (~1300 lines and growing) into a package:
   `questions/arithmetic.py`, `fractions.py`, `order_of_ops.py`,
-  `geometry_data.py`, behind the same `generate_questions` facade.
+  `word_problems.py`, `geometry_data.py`, etc., behind the same
+  `generate_questions` facade.
 - **Tune difficulty scaling per topic.** `_difficulty_range` is linear in
   grade for every type; multiplication should probably cap factors near
   12 (times tables) regardless of range, and fractions difficulty is
@@ -176,6 +126,49 @@ Found while auditing the current code; ordered by user impact.
 
 | Phase | Items | Why first |
 |---|---|---|
-| 1 — quick wins | CI workflow; QuizScreen timer fixes (§2.1–2.3); returning-player flow (§2.4); README refresh | Small, high-impact, unblocks safe iteration on everything else |
-| 2 — content & fairness | Word problems; multiple-choice mode; grade gating in setup; leaderboard filters in UI; numeric answer normalization | Directly visible to kids; makes the leaderboard meaningful |
+| 1 — quick wins | CI workflow; server-side time clamp (§2.1); users/check cleanup (§2.2) | Small, high-impact, unblocks safe iteration on everything else |
+| 2 — content & fairness | Multiple-choice mode; grade gating in setup; leaderboard filters in UI; mixed-topic quizzes | Directly visible to kids; makes the leaderboard meaningful |
 | 3 — depth | Adaptive difficulty; progress history; PIN accounts; visual geometry | Builds on data and infrastructure from phases 1–2 |
+
+---
+
+## Done
+
+Completed items from the original 2026-07-12 audit, newest first.
+
+### 2026-07-13 — quiz timer & returning-player fixes
+
+- **Bug 1 — total quiz timer paused by typing.** Both countdowns are now
+  computed from fixed deadline timestamps inside a single long-lived
+  interval (`QuizScreen.tsx`), so re-renders can't tear the clock down.
+- **Bug 2 — timer expiry on the last question dead-ended the quiz.**
+  Expiry on question 10 now auto-finishes and submits.
+- **Bug 3 — timer expiry discarded a typed-but-unsubmitted answer.**
+  The draft answer is salvaged before advancing (and on auto-finish).
+- **Bug 4 — returning players were locked out of their name.** A 409
+  from `POST /api/users` is now treated as "welcome back" and the player
+  continues under the existing name (no accounts exist, so no auth to
+  check). A PIN system remains a long-term item.
+- Component tests added for all four fixes (vitest + React Testing
+  Library, fake timers): `QuizScreen.test.tsx`, `UsernameScreen.test.tsx`.
+
+### 2026-07-13 — six new question types (PR #3)
+
+- **Word problems, comparison & number sense, money & time, decimal
+  arithmetic, percentages, measurement conversions** — the entire
+  near-term expansion list, each with grade/difficulty tier gating.
+  Money stays in whole cents; decimals are computed in integer
+  tenths/hundredths so answers are exact.
+- **Bug 7 — strict answer grading.** `grade_answer` now compares numeric
+  answers numerically (`0.50`, `.5`, `7.0` accepted); fractions still
+  require simplest form; word answers stay case-insensitive.
+- **Bug 9 — stale README.** Topic list refreshed (and again with the
+  Features section alongside these fixes).
+- `grade_answer` table tests for kid-typed formats added.
+
+### 2026-07-12 — question library expansion + real API (PR #1)
+
+- New `fractions` and `order_of_operations` types; two-step algebra
+  (`ax + b = c`) at grade 4+ hard.
+- Frontend rewired from leftover `mockData.ts` to the real FastAPI
+  backend (typed client in `frontend/src/lib/api.ts`); mock data deleted.

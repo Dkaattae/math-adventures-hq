@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { Question } from "@/lib/api";
 
@@ -23,31 +23,73 @@ const QuizScreen = ({ questions, onFinish }: Props) => {
   // pulse rather than a correct/wrong indicator.
   const [feedback, setFeedback] = useState<"saved" | null>(null);
 
+  // Countdowns are computed from fixed deadline timestamps, not by
+  // decrementing state on each tick. A decrementing interval gets torn
+  // down and recreated whenever its deps change, which paused the clock
+  // while the player was typing.
+  const totalDeadline = useRef(Date.now() + TOTAL_TIME * 1000);
+  const questionDeadline = useRef(Date.now() + QUESTION_TIME * 1000);
+  const finished = useRef(false);
+
+  // Latest state, readable from inside the single long-lived interval.
+  const latest = useRef({ answers, inputVal, current });
+  useEffect(() => {
+    latest.current = { answers, inputVal, current };
+  });
+
   const finish = useCallback(() => {
+    if (finished.current) return;
+    finished.current = true;
+    const { answers, inputVal, current } = latest.current;
     const finalAnswers = [...answers];
     if (inputVal.trim() && finalAnswers[current] === null) {
       finalAnswers[current] = inputVal.trim();
     }
-    onFinish(finalAnswers, TOTAL_TIME - totalTimer);
-  }, [answers, inputVal, current, totalTimer, onFinish]);
+    const secondsLeft = Math.max(0, Math.ceil((totalDeadline.current - Date.now()) / 1000));
+    onFinish(finalAnswers, TOTAL_TIME - secondsLeft);
+  }, [onFinish]);
 
-  // total timer
+  // Single interval drives both countdowns for the quiz's whole lifetime.
   useEffect(() => {
-    const t = setInterval(() => setTotalTimer((p) => {
-      if (p <= 1) { finish(); return 0; }
-      return p - 1;
-    }), 1000);
+    const tick = () => {
+      const now = Date.now();
+      const totalLeft = Math.max(0, Math.ceil((totalDeadline.current - now) / 1000));
+      setTotalTimer(totalLeft);
+      if (totalLeft <= 0) {
+        finish();
+        return;
+      }
+
+      const questionLeft = Math.max(0, Math.ceil((questionDeadline.current - now) / 1000));
+      setQuestionTimer(questionLeft);
+      if (questionLeft <= 0) {
+        const { answers, inputVal, current } = latest.current;
+        // Time's up on this question — keep whatever was typed.
+        if (inputVal.trim() && answers[current] === null) {
+          const salvaged = inputVal.trim();
+          setAnswers((prev) => {
+            const next = [...prev];
+            next[current] = salvaged;
+            return next;
+          });
+        }
+        if (current >= 9) {
+          finish();
+          return;
+        }
+        setCurrent(current + 1);
+        questionDeadline.current = now + QUESTION_TIME * 1000;
+      }
+    };
+    const t = setInterval(tick, 250);
     return () => clearInterval(t);
   }, [finish]);
 
-  // question timer
+  // Fresh 15 seconds whenever the player lands on a question, including
+  // manual Next/Review navigation.
   useEffect(() => {
+    questionDeadline.current = Date.now() + QUESTION_TIME * 1000;
     setQuestionTimer(QUESTION_TIME);
-    const t = setInterval(() => setQuestionTimer((p) => {
-      if (p <= 1) { goNext(); return QUESTION_TIME; }
-      return p - 1;
-    }), 1000);
-    return () => clearInterval(t);
   }, [current]);
 
   useEffect(() => {
