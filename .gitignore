@@ -40,3 +40,5 @@ env/
 # ---------- docker / data ----------
 # postgres_data volume is managed by docker; never commit a dumped copy
 postgres_data/
+# local sqlite database used when running the backend without postgres
+*.db

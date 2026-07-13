@@ -1,7 +1,20 @@
 import { motion } from "framer-motion";
-import { leaderboard } from "@/data/mockData";
+import { useQuery } from "@tanstack/react-query";
+import { getLeaderboard } from "@/lib/api";
 
 const Leaderboard = () => {
+  const { data: leaderboard = [], isLoading, isError } = useQuery({
+    queryKey: ["leaderboard"],
+    queryFn: () => getLeaderboard({ limit: 5 }),
+  });
+
+  if (isLoading) {
+    return <p className="text-center text-muted-foreground font-body">Loading leaderboard...</p>;
+  }
+  if (isError) {
+    return null; // leaderboard is a nice-to-have; fail quietly rather than blocking the username screen
+  }
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}

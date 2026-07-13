@@ -27,6 +27,8 @@ class MathType(str, Enum):
     division = "division"
     algebra = "algebra"
     geometry = "geometry"
+    fractions = "fractions"
+    order_of_operations = "order_of_operations"
 
 
 class Difficulty(str, Enum):

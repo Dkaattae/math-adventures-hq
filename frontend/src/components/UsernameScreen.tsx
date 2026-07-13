@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { existingUsernames } from "@/data/mockData";
+import { ApiError, createUser } from "@/lib/api";
 import Leaderboard from "./Leaderboard";
 
 interface Props {
@@ -10,16 +10,27 @@ interface Props {
 const UsernameScreen = ({ onSubmit }: Props) => {
   const [name, setName] = useState("");
   const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     const trimmed = name.trim();
-    if (!trimmed) return;
-    if (existingUsernames.some((u) => u.toLowerCase() === trimmed.toLowerCase())) {
-      setError("Oops! That name is taken. Try adding your last name or a lucky number 😊");
-      return;
-    }
+    if (!trimmed || submitting) return;
+    setSubmitting(true);
     setError("");
-    onSubmit(trimmed);
+    try {
+      await createUser(trimmed);
+      onSubmit(trimmed);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        setError("Oops! That name is taken. Try adding your last name or a lucky number 😊");
+      } else if (err instanceof ApiError && err.status === 422) {
+        setError("Names can be at most 20 characters. Try a shorter one! ✂️");
+      } else {
+        setError("Couldn't reach the server. Please try again 🔌");
+      }
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -58,6 +69,7 @@ const UsernameScreen = ({ onSubmit }: Props) => {
             onChange={(e) => { setName(e.target.value); setError(""); }}
             onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
             placeholder="Type your name here..."
+            maxLength={20}
             className="w-full px-5 py-4 text-lg rounded-2xl border-2 border-border bg-card font-body focus:outline-none focus:border-primary focus:ring-2 focus:ring-ring/30 transition-all"
           />
           <AnimatePresence>
@@ -77,10 +89,10 @@ const UsernameScreen = ({ onSubmit }: Props) => {
           whileHover={{ scale: 1.03 }}
           whileTap={{ scale: 0.97 }}
           onClick={handleSubmit}
-          disabled={!name.trim()}
+          disabled={!name.trim() || submitting}
           className="w-full py-4 rounded-2xl bg-primary text-primary-foreground font-heading font-bold text-lg shadow-lg disabled:opacity-40 disabled:cursor-not-allowed transition-all hover:shadow-xl"
         >
-          Let's Go! 🚀
+          {submitting ? "Just a sec..." : "Let's Go! 🚀"}
         </motion.button>
       </motion.div>
 

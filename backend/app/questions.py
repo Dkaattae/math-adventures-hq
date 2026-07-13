@@ -243,6 +243,34 @@ def _alg_x_over_c(rng: random.Random, lo: int, hi: int):
     )
 
 
+def _alg_two_step_plus(rng: random.Random, lo: int, hi: int):
+    a = rng.randint(2, max(3, hi // 3))
+    x = rng.randint(1, max(2, hi // 2))
+    b = rng.randint(1, hi)
+    c = a * x + b
+    return (
+        ("alg2+", a, b, x),
+        f"{a}x + {b} = {c}. What is x?",
+        x,
+        f"x = {x}. Subtract {b} from both sides: {a}x = {c - b}. "
+        f"Divide by {a}: x = {x}. 🧠",
+    )
+
+
+def _alg_two_step_minus(rng: random.Random, lo: int, hi: int):
+    a = rng.randint(2, max(3, hi // 3))
+    x = rng.randint(1, max(2, hi // 2))
+    b = rng.randint(0, a * x)  # keep c = a*x - b non-negative
+    c = a * x - b
+    return (
+        ("alg2-", a, b, x),
+        f"{a}x - {b} = {c}. What is x?",
+        x,
+        f"x = {x}. Add {b} to both sides: {a}x = {c + b}. "
+        f"Divide by {a}: x = {x}. 🧠",
+    )
+
+
 _ALGEBRA_TEMPLATES_EASY: list[Factory] = [_alg_x_plus_c, _alg_x_minus_c]
 _ALGEBRA_TEMPLATES_FULL: list[Factory] = [
     _alg_x_plus_c,
@@ -251,12 +279,212 @@ _ALGEBRA_TEMPLATES_FULL: list[Factory] = [
     _alg_c_times_x,
     _alg_x_over_c,
 ]
+_ALGEBRA_TEMPLATES_HARD: list[Factory] = _ALGEBRA_TEMPLATES_FULL + [
+    _alg_two_step_plus,
+    _alg_two_step_minus,
+]
 
 
 def _make_algebra(rng: random.Random, lo: int, hi: int):
     # K/1 stick to +/-; older grades see the full template set.
     templates = _ALGEBRA_TEMPLATES_EASY if hi < 10 else _ALGEBRA_TEMPLATES_FULL
     return rng.choice(templates)(rng, lo, hi)
+
+
+def _make_algebra_hard(rng: random.Random, lo: int, hi: int):
+    # Two-step equations (ax + b = c) on top of the full one-step set.
+    return rng.choice(_ALGEBRA_TEMPLATES_HARD)(rng, lo, hi)
+
+
+# ---------- fractions: whole-number share, like/unlike denominators, product ----------
+
+
+def _simplify_fraction(num: int, den: int) -> str:
+    """Format num/den in lowest terms; whole-number results drop the denominator."""
+    if num == 0:
+        return "0"
+    g = gcd(num, den)
+    num, den = num // g, den // g
+    return str(num) if den == 1 else f"{num}/{den}"
+
+
+def _frac_of_whole(rng: random.Random, lo: int, hi: int):
+    den = rng.choice([2, 3, 4, 5, 10])
+    multiplier = rng.randint(1, max(2, hi // den))
+    whole = den * multiplier
+    num = rng.randint(1, den - 1)
+    answer = num * whole // den
+    return (
+        ("fracof", num, den, whole),
+        f"What is {num}/{den} of {whole}?",
+        answer,
+        f"{whole} ÷ {den} = {whole // den}, then × {num} = {answer}. 🍕",
+    )
+
+
+def _frac_same_denom(rng: random.Random, lo: int, hi: int):
+    den = rng.randint(2, max(3, hi // 2))
+    a = rng.randint(1, den - 1)
+    b = rng.randint(1, den - 1)
+    op = rng.choice(["+", "-"])
+    if op == "-" and b > a:
+        a, b = b, a
+    num = a + b if op == "+" else a - b
+    result = _simplify_fraction(num, den)
+    hint = f"{a}/{den} {op} {b}/{den} = {num}/{den}" + (f" = {result}" if result != f"{num}/{den}" else "") + "."
+    return (
+        ("fracsame", op, den, a, b),
+        f"{a}/{den} {op} {b}/{den} = ? (simplest form)",
+        result,
+        hint + " 🍕",
+    )
+
+
+def _frac_unlike_denom(rng: random.Random, lo: int, hi: int):
+    d1 = rng.randint(2, max(3, hi // 3))
+    d2 = rng.randint(2, max(3, hi // 3))
+    if d2 == d1:
+        d2 += 1
+    n1 = rng.randint(1, d1 - 1)
+    n2 = rng.randint(1, d2 - 1)
+    lcd = d1 * d2 // gcd(d1, d2)
+    num = n1 * (lcd // d1) + n2 * (lcd // d2)
+    result = _simplify_fraction(num, lcd)
+    return (
+        ("fracunlike", d1, n1, d2, n2),
+        f"{n1}/{d1} + {n2}/{d2} = ? (simplest form)",
+        result,
+        f"LCD of {d1} and {d2} is {lcd}: {n1}/{d1} = {n1 * (lcd // d1)}/{lcd}, "
+        f"{n2}/{d2} = {n2 * (lcd // d2)}/{lcd}. Sum = {num}/{lcd}"
+        + (f" = {result}" if result != f"{num}/{lcd}" else "")
+        + ". 🍕",
+    )
+
+
+def _frac_multiply(rng: random.Random, lo: int, hi: int):
+    n1 = rng.randint(1, max(2, hi // 3))
+    d1 = rng.randint(n1 + 1, max(n1 + 2, hi // 2 + 1))
+    n2 = rng.randint(1, max(2, hi // 3))
+    d2 = rng.randint(n2 + 1, max(n2 + 2, hi // 2 + 1))
+    num, den = n1 * n2, d1 * d2
+    result = _simplify_fraction(num, den)
+    return (
+        ("fracmul", n1, d1, n2, d2),
+        f"{n1}/{d1} × {n2}/{d2} = ? (simplest form)",
+        result,
+        f"Multiply straight across: ({n1}×{n2})/({d1}×{d2}) = {num}/{den}"
+        + (f" = {result}" if result != f"{num}/{den}" else "")
+        + ". 🍕",
+    )
+
+
+def _make_fractions_basic(rng: random.Random, lo: int, hi: int):
+    return _frac_of_whole(rng, lo, hi)
+
+
+def _make_fractions_intermediate(rng: random.Random, lo: int, hi: int):
+    return rng.choice([_frac_of_whole, _frac_same_denom])(rng, lo, hi)
+
+
+def _make_fractions_advanced(rng: random.Random, lo: int, hi: int):
+    return rng.choice([_frac_same_denom, _frac_unlike_denom, _frac_multiply])(rng, lo, hi)
+
+
+# ---------- order of operations: PEMDAS templates of increasing complexity ----------
+
+
+def _ooo_add_mul(rng: random.Random, lo: int, hi: int):
+    a = rng.randint(lo, hi)
+    b = rng.randint(1, max(2, hi // 4))
+    c = rng.randint(1, max(2, hi // 4))
+    answer = a + b * c
+    return (
+        ("ooo_am", a, b, c),
+        f"{a} + {b} × {c} = ?",
+        answer,
+        f"Multiply first: {b} × {c} = {b * c}. Then add: {a} + {b * c} = {answer}. Remember PEMDAS! 📐",
+    )
+
+
+def _ooo_mul_add(rng: random.Random, lo: int, hi: int):
+    a = rng.randint(1, max(2, hi // 4))
+    b = rng.randint(1, max(2, hi // 4))
+    c = rng.randint(lo, hi)
+    answer = a * b + c
+    return (
+        ("ooo_ma", a, b, c),
+        f"{a} × {b} + {c} = ?",
+        answer,
+        f"Multiply first: {a} × {b} = {a * b}. Then add: {a * b} + {c} = {answer}. Remember PEMDAS! 📐",
+    )
+
+
+def _ooo_sub_mul(rng: random.Random, lo: int, hi: int):
+    b = rng.randint(1, max(2, hi // 4))
+    c = rng.randint(1, max(2, hi // 4))
+    product = b * c
+    a = rng.randint(product, product + max(5, hi))
+    answer = a - product
+    return (
+        ("ooo_sm", a, b, c),
+        f"{a} - {b} × {c} = ?",
+        answer,
+        f"Multiply first: {b} × {c} = {product}. Then subtract: {a} - {product} = {answer}. Remember PEMDAS! 📐",
+    )
+
+
+def _ooo_div_add(rng: random.Random, lo: int, hi: int):
+    divisor = rng.randint(2, max(3, hi // 4))
+    quotient = rng.randint(1, max(2, hi // 4))
+    dividend = divisor * quotient
+    c = rng.randint(lo, hi)
+    answer = quotient + c
+    return (
+        ("ooo_da", dividend, divisor, c),
+        f"{dividend} ÷ {divisor} + {c} = ?",
+        answer,
+        f"Divide first: {dividend} ÷ {divisor} = {quotient}. Then add: {quotient} + {c} = {answer}. Remember PEMDAS! 📐",
+    )
+
+
+def _ooo_three_terms(rng: random.Random, lo: int, hi: int):
+    a = rng.randint(lo, hi)
+    b = rng.randint(1, max(2, hi // 4))
+    c = rng.randint(1, max(2, hi // 4))
+    product = b * c
+    d = rng.randint(0, product)
+    answer = a + product - d
+    return (
+        ("ooo_3t", a, b, c, d),
+        f"{a} + {b} × {c} - {d} = ?",
+        answer,
+        f"Multiply first: {b} × {c} = {product}. Then: {a} + {product} - {d} = {answer}. Remember PEMDAS! 📐",
+    )
+
+
+def _ooo_parens(rng: random.Random, lo: int, hi: int):
+    a = rng.randint(lo, hi)
+    b = rng.randint(1, max(2, hi // 4))
+    c = rng.randint(2, max(3, hi // 4))
+    answer = (a + b) * c
+    return (
+        ("ooo_pa", a, b, c),
+        f"({a} + {b}) × {c} = ?",
+        answer,
+        f"Parentheses first: {a} + {b} = {a + b}. Then multiply: {a + b} × {c} = {answer}. Parentheses win! 📐",
+    )
+
+
+def _make_ooo_basic(rng: random.Random, lo: int, hi: int):
+    return rng.choice([_ooo_add_mul, _ooo_mul_add])(rng, lo, hi)
+
+
+def _make_ooo_intermediate(rng: random.Random, lo: int, hi: int):
+    return rng.choice([_ooo_add_mul, _ooo_mul_add, _ooo_sub_mul, _ooo_div_add])(rng, lo, hi)
+
+
+def _make_ooo_advanced(rng: random.Random, lo: int, hi: int):
+    return rng.choice([_ooo_sub_mul, _ooo_div_add, _ooo_three_terms, _ooo_parens])(rng, lo, hi)
 
 
 # ---------- geometry: sample from curated pools by difficulty ----------
@@ -463,6 +691,11 @@ def _pick_factory(math_type: MathType, difficulty: Difficulty, grade: Grade) -> 
     - Subtraction: negative-capable variant kicks in at grade 4+ hard.
     - Division: remainder questions appear from grade 3 onward at
       medium/hard; fractions and decimals only at grade 5 hard.
+    - Algebra: two-step equations (ax + b = c) kick in at grade 4+ hard.
+    - Fractions: "fraction of a whole" only below grade 2/easy; unlike
+      denominators and multiplication unlock at grade 4+ hard.
+    - Order of operations: two-term problems only below grade 3/medium;
+      parentheses and three-term expressions unlock at grade 4+ hard.
     - Other types use a single factory regardless of difficulty.
     """
     g = 0 if grade == Grade.K else int(grade.value)
@@ -479,10 +712,28 @@ def _pick_factory(math_type: MathType, difficulty: Difficulty, grade: Grade) -> 
             return _make_division_with_remainder
         return _make_division
 
+    if math_type == MathType.algebra:
+        if difficulty == Difficulty.hard and g >= 4:
+            return _make_algebra_hard
+        return _make_algebra
+
+    if math_type == MathType.fractions:
+        if difficulty == Difficulty.hard and g >= 4:
+            return _make_fractions_advanced
+        if g >= 2 and difficulty != Difficulty.easy:
+            return _make_fractions_intermediate
+        return _make_fractions_basic
+
+    if math_type == MathType.order_of_operations:
+        if difficulty == Difficulty.hard and g >= 4:
+            return _make_ooo_advanced
+        if g >= 3 and difficulty != Difficulty.easy:
+            return _make_ooo_intermediate
+        return _make_ooo_basic
+
     return {
         MathType.addition: _make_addition,
         MathType.multiplication: _make_multiplication,
-        MathType.algebra: _make_algebra,
     }[math_type]
 
 

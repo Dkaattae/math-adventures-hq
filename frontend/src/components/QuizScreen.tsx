@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import type { Question } from "@/data/mockData";
+import type { Question } from "@/lib/api";
 
 interface Props {
   questions: Question[];
@@ -18,7 +18,10 @@ const QuizScreen = ({ questions, onFinish }: Props) => {
   const [totalTimer, setTotalTimer] = useState(TOTAL_TIME);
   const [flagged, setFlagged] = useState<Set<number>>(new Set());
   const [reviewing, setReviewing] = useState(false);
-  const [feedback, setFeedback] = useState<"correct" | "wrong" | null>(null);
+  // The backend never sends the correct answer before the quiz is
+  // submitted (anti-cheat), so this is just a "your answer was saved"
+  // pulse rather than a correct/wrong indicator.
+  const [feedback, setFeedback] = useState<"saved" | null>(null);
 
   const finish = useCallback(() => {
     const finalAnswers = [...answers];
@@ -57,12 +60,11 @@ const QuizScreen = ({ questions, onFinish }: Props) => {
     newAnswers[current] = inputVal.trim();
     setAnswers(newAnswers);
 
-    const isCorrect = inputVal.trim() === String(questions[current].correctAnswer);
-    setFeedback(isCorrect ? "correct" : "wrong");
+    setFeedback("saved");
     setTimeout(() => {
       setFeedback(null);
       if (current < 9) setCurrent(current + 1);
-    }, 600);
+    }, 400);
   };
 
   const goNext = () => {
@@ -115,9 +117,7 @@ const QuizScreen = ({ questions, onFinish }: Props) => {
               Question {current + 1} of 10
             </p>
             <div className={`p-8 rounded-3xl border-2 text-center transition-colors ${
-              feedback === "correct" ? "bg-success/10 border-success" :
-              feedback === "wrong" ? "bg-destructive/10 border-destructive" :
-              "bg-card border-border"
+              feedback === "saved" ? "bg-success/10 border-success" : "bg-card border-border"
             }`}>
               <p className="text-2xl md:text-3xl font-heading font-bold">
                 {questions[current].question}
@@ -139,9 +139,9 @@ const QuizScreen = ({ questions, onFinish }: Props) => {
           <motion.p
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
-            className={`text-4xl mt-4 ${feedback === "correct" ? "" : ""}`}
+            className="text-4xl mt-4"
           >
-            {feedback === "correct" ? "✅" : "❌"}
+            📝
           </motion.p>
         )}
       </div>
