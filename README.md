@@ -1,11 +1,32 @@
 # Math Adventures HQ
 
-A kids' math quiz web app. Players pick a grade (K–5), a math topic
-(addition, subtraction, multiplication, division, algebra, geometry,
-fractions, order of operations, word problems, comparing numbers,
-money & time, decimals, percentages, measurement), and a difficulty,
-then answer 10 auto-generated questions. Scores are persisted to a
-Postgres-backed leaderboard.
+A kids' math quiz web app. Players pick a grade (K–5), a math topic,
+and a difficulty, then answer 10 auto-generated questions against the
+clock. Scores are persisted to a Postgres-backed leaderboard.
+
+## Features
+
+- **14 math topics**: addition, subtraction, multiplication, division,
+  algebra, geometry, fractions, order of operations, word problems,
+  comparing numbers, money & time, decimals, percentages, and
+  measurement conversions.
+- **Grade & difficulty tiers**: every topic scales with grade (K–5) and
+  difficulty (easy/medium/hard) — e.g. division introduces remainders at
+  grade 3 medium and fractions/decimals at grade 5 hard; word problems
+  add division stories at grade 3 hard.
+- **Timed quizzes**: 15 seconds per question, 3 minutes total, with
+  flagging and a review panel for skipping around.
+- **Forgiving answer grading**: numeric answers are compared as numbers
+  (`0.50` counts for `0.5`), fractions require simplest form by design,
+  word answers are case-insensitive.
+- **Anti-cheat by design**: the API never reveals correct answers until
+  the quiz is submitted; grading happens server-side.
+- **Returning players**: type the same name again and keep playing —
+  no accounts needed.
+- **Leaderboard**: score + time ranking with per-topic/difficulty/grade
+  filters in the API.
+- **Kid-friendly explanations**: every question carries a short "here's
+  how" hint with the graded results.
 
 ## Stack
 
