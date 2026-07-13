@@ -19,6 +19,12 @@ ALL_TYPES = [
     MathType.geometry,
     MathType.fractions,
     MathType.order_of_operations,
+    MathType.word_problems,
+    MathType.comparison,
+    MathType.money_time,
+    MathType.decimals,
+    MathType.percentages,
+    MathType.measurement,
 ]
 
 # (difficulty, grade) combos that have enough value-space for 10 uniques.
@@ -397,6 +403,260 @@ def test_order_of_operations_respects_precedence_not_left_to_right():
                 if m:
                     a, b, c = map(int, m.groups())
                     assert q.correctAnswer == a * b + c
+
+
+# ---------- word problems ----------
+
+
+def test_word_problems_basic_is_add_sub_stories_only():
+    """K/easy word problems: no multiplication or division phrasing."""
+    rng = random.Random(0)
+    for _ in range(10):
+        qs = generate_questions(MathType.word_problems, Difficulty.easy, Grade.K, rng=rng)
+        for q in qs:
+            assert "each bag" not in q.question and "shares" not in q.question, q.question
+
+
+def test_word_problems_advanced_includes_division():
+    saw_div = False
+    for seed in range(40):
+        rng = random.Random(seed)
+        qs = generate_questions(MathType.word_problems, Difficulty.hard, Grade.G4, rng=rng)
+        if any("shares" in q.question for q in qs):
+            saw_div = True
+            break
+    assert saw_div, "G4/hard word problems never produced a sharing/division story"
+
+
+def test_word_problem_answers_match_the_story():
+    """Independently recompute each story's answer from its text."""
+    for seed in range(20):
+        rng = random.Random(seed)
+        qs = generate_questions(MathType.word_problems, Difficulty.hard, Grade.G5, rng=rng)
+        for q in qs:
+            m = re.search(r"has (\d+) .+ and gets (\d+) more", q.question)
+            if m:
+                assert q.correctAnswer == int(m.group(1)) + int(m.group(2)), q.question
+            m = re.search(r"has (\d+) .+ and gives (\d+)", q.question)
+            if m:
+                assert q.correctAnswer == int(m.group(1)) - int(m.group(2)), q.question
+            m = re.search(r"(\d+) bags with (\d+)", q.question)
+            if m:
+                assert q.correctAnswer == int(m.group(1)) * int(m.group(2)), q.question
+            m = re.search(r"shares (\d+) .+ among (\d+)", q.question)
+            if m:
+                assert q.correctAnswer == int(m.group(1)) // int(m.group(2)), q.question
+
+
+# ---------- comparison & number sense ----------
+
+
+def test_comparison_symbol_answers_are_correct():
+    for seed in range(20):
+        rng = random.Random(seed)
+        qs = generate_questions(MathType.comparison, Difficulty.medium, Grade.G3, rng=rng)
+        for q in qs:
+            m = re.match(r"^Fill in the blank: (\d+) _ (\d+)", q.question)
+            if m:
+                a, b = int(m.group(1)), int(m.group(2))
+                expected = "<" if a < b else (">" if a > b else "=")
+                assert q.correctAnswer == expected, q.question
+
+
+def test_comparison_rounding_only_at_grade3_hard():
+    rng = random.Random(0)
+    for _ in range(10):
+        qs = generate_questions(MathType.comparison, Difficulty.easy, Grade.G1, rng=rng)
+        for q in qs:
+            assert "Round" not in q.question, q.question
+
+    saw_round = False
+    for seed in range(40):
+        rng = random.Random(seed)
+        qs = generate_questions(MathType.comparison, Difficulty.hard, Grade.G3, rng=rng)
+        if any("Round" in q.question for q in qs):
+            saw_round = True
+            break
+    assert saw_round, "G3/hard comparison never produced a rounding question"
+
+
+def test_comparison_rounding_answers_are_correct():
+    for seed in range(30):
+        rng = random.Random(seed)
+        qs = generate_questions(MathType.comparison, Difficulty.hard, Grade.G5, rng=rng)
+        for q in qs:
+            m = re.match(r"^Round (\d+) to the nearest 10\.", q.question)
+            if m:
+                n = int(m.group(1))
+                assert q.correctAnswer == ((n + 5) // 10) * 10, q.question
+
+
+# ---------- money & time ----------
+
+
+def test_money_answers_are_whole_cents():
+    for seed in range(20):
+        rng = random.Random(seed)
+        for difficulty in (Difficulty.easy, Difficulty.medium, Difficulty.hard):
+            qs = generate_questions(MathType.money_time, difficulty, Grade.G3, rng=rng)
+            for q in qs:
+                assert isinstance(q.correctAnswer, int), q.question
+                assert q.correctAnswer > 0, q.question
+
+
+def test_money_coin_totals_are_correct():
+    values = {"quarter": 25, "dime": 10, "nickel": 5, "penny": 1,
+              "quarters": 25, "dimes": 10, "nickels": 5, "pennies": 1}
+    for seed in range(30):
+        rng = random.Random(seed)
+        qs = generate_questions(MathType.money_time, Difficulty.hard, Grade.G4, rng=rng)
+        for q in qs:
+            m = re.match(r"^You have (\d+) (\w+) and (\d+) (\w+)\.", q.question)
+            if m:
+                total = int(m.group(1)) * values[m.group(2)] + int(m.group(3)) * values[m.group(4)]
+                assert q.correctAnswer == total, q.question
+
+
+def test_elapsed_time_answers_are_correct():
+    for seed in range(30):
+        rng = random.Random(seed)
+        qs = generate_questions(MathType.money_time, Difficulty.hard, Grade.G5, rng=rng)
+        for q in qs:
+            m = re.match(r"^How many minutes is it from (\d+):(\d+) to (\d+):(\d+)\?", q.question)
+            if m:
+                h1, m1, h2, m2 = map(int, m.groups())
+                assert q.correctAnswer == (h2 * 60 + m2) - (h1 * 60 + m1), q.question
+                assert q.correctAnswer > 0, q.question
+
+
+# ---------- decimals ----------
+
+
+def test_decimal_answers_evaluate_exactly():
+    for seed in range(30):
+        rng = random.Random(seed)
+        for difficulty in (Difficulty.easy, Difficulty.hard):
+            qs = generate_questions(MathType.decimals, difficulty, Grade.G5, rng=rng)
+            for q in qs:
+                m = re.match(r"^([\d.]+) ([+-]) ([\d.]+) = \?$", q.question)
+                if m:
+                    a, op, b = float(m.group(1)), m.group(2), float(m.group(3))
+                    expected = round(a + b if op == "+" else a - b, 2)
+                    assert float(str(q.correctAnswer)) == expected, q.question
+
+
+def test_decimals_basic_tier_is_tenths_only():
+    """Below G4/hard, decimals stick to single-digit tenths arithmetic."""
+    rng = random.Random(0)
+    for _ in range(10):
+        qs = generate_questions(MathType.decimals, Difficulty.medium, Grade.G3, rng=rng)
+        for q in qs:
+            assert "×" not in q.question and "bigger" not in q.question, q.question
+
+
+def test_decimal_comparison_answers_are_correct():
+    saw_compare = False
+    for seed in range(40):
+        rng = random.Random(seed)
+        qs = generate_questions(MathType.decimals, Difficulty.hard, Grade.G5, rng=rng)
+        for q in qs:
+            m = re.match(r"^Which is bigger: ([\d.]+) or ([\d.]+)\?$", q.question)
+            if m:
+                saw_compare = True
+                bigger = max(float(m.group(1)), float(m.group(2)))
+                assert float(str(q.correctAnswer)) == bigger, q.question
+    assert saw_compare, "G5/hard decimals never produced a comparison question"
+
+
+# ---------- percentages ----------
+
+
+def test_percentage_answers_are_whole_and_correct():
+    for seed in range(30):
+        rng = random.Random(seed)
+        for grade, difficulty in ((Grade.G3, Difficulty.easy), (Grade.G5, Difficulty.hard)):
+            qs = generate_questions(MathType.percentages, difficulty, grade, rng=rng)
+            for q in qs:
+                m = re.match(r"^What is (\d+)% of (\d+)\?$", q.question)
+                assert m, q.question
+                pct, n = int(m.group(1)), int(m.group(2))
+                assert pct * n % 100 == 0, f"non-integer answer: {q.question}"
+                assert q.correctAnswer == pct * n // 100, q.question
+
+
+def test_percentage_25_75_only_at_grade5_hard():
+    rng = random.Random(0)
+    for _ in range(20):
+        qs = generate_questions(MathType.percentages, Difficulty.medium, Grade.G4, rng=rng)
+        for q in qs:
+            m = re.match(r"^What is (\d+)%", q.question)
+            assert int(m.group(1)) in (10, 50, 100), q.question
+
+
+# ---------- measurement ----------
+
+
+def test_measurement_conversions_are_correct():
+    factors = {
+        "centimeters": {"meter": 100}, "millimeters": {"centimeter": 10},
+        "seconds": {"minute": 60}, "inches": {"foot": 12},
+        "meters": {"kilometer": 1000}, "grams": {"kilogram": 1000},
+        "milliliters": {"liter": 1000}, "feet": {"yard": 3},
+    }
+    for seed in range(30):
+        rng = random.Random(seed)
+        for grade, difficulty in ((Grade.K, Difficulty.easy), (Grade.G5, Difficulty.hard)):
+            qs = generate_questions(MathType.measurement, difficulty, grade, rng=rng)
+            for q in qs:
+                m = re.match(r"^How many (\w+) are in (\d+) (\w+)\?$", q.question)
+                if m:
+                    small, k, big_plural = m.group(1), int(m.group(2)), m.group(3)
+                    big = big_plural.rstrip("s") if big_plural != "feet" else "foot"
+                    factor = factors[small][big]
+                    assert q.correctAnswer == k * factor, q.question
+
+
+def test_measurement_reverse_direction_appears_at_grade3_medium():
+    saw_reverse = False
+    for seed in range(40):
+        rng = random.Random(seed)
+        qs = generate_questions(MathType.measurement, Difficulty.medium, Grade.G3, rng=rng)
+        if any("is how many" in q.question for q in qs):
+            saw_reverse = True
+            break
+    assert saw_reverse, "G3/medium measurement never produced a reverse conversion"
+
+
+# ---------- answer grading normalization ----------
+
+
+def test_grade_answer_accepts_equivalent_decimal_formats():
+    from app.questions import grade_answer
+
+    assert grade_answer("0.5", "0.50") is True
+    assert grade_answer("0.5", ".5") is True
+    assert grade_answer("0.5", "0.5") is True
+    assert grade_answer("1.2", "1.20") is True
+    assert grade_answer("0.5", "0.6") is False
+    assert grade_answer(7, "7.0") is True
+    assert grade_answer(7, "7") is True
+    assert grade_answer(7, "8.0") is False
+
+
+def test_grade_answer_still_requires_simplified_fractions():
+    from app.questions import grade_answer
+
+    assert grade_answer("3/4", "6/8") is False
+    assert grade_answer("3/4", "3/4") is True
+    assert grade_answer("3/4", "0.75") is False  # fraction questions want a fraction
+
+
+def test_grade_answer_word_answers_stay_case_insensitive():
+    from app.questions import grade_answer
+
+    assert grade_answer("even", "EVEN") is True
+    assert grade_answer("<", "<") is True
+    assert grade_answer("even", "odd") is False
 
 
 def test_small_space_falls_back_gracefully():

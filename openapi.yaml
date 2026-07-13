@@ -218,7 +218,8 @@ components:
 
     MathType:
       type: string
-      enum: [addition, subtraction, multiplication, division, algebra, geometry, fractions, order_of_operations]
+      enum: [addition, subtraction, multiplication, division, algebra, geometry, fractions, order_of_operations,
+             word_problems, comparison, money_time, decimals, percentages, measurement]
 
     Difficulty:
       type: string

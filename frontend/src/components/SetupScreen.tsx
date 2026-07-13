@@ -14,6 +14,8 @@ const grades: Grade[] = ["K", "1", "2", "3", "4", "5"];
 const mathTypes: MathType[] = [
   "addition", "subtraction", "multiplication", "division",
   "algebra", "geometry", "fractions", "order_of_operations",
+  "word_problems", "comparison", "money_time", "decimals",
+  "percentages", "measurement",
 ];
 const difficulties: Difficulty[] = ["easy", "medium", "hard"];
 
