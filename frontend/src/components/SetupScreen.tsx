@@ -1,13 +1,13 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import {
-  type MathType, type Difficulty, type Grade,
-  mathTypeLabels, difficultyConfig, encouragingMessages,
+  type MathType, type Difficulty, type Grade, type AnswerMode,
+  mathTypeLabels, difficultyConfig, answerModeConfig, encouragingMessages,
 } from "@/data/quizConfig";
 
 interface Props {
   username: string;
-  onStart: (grade: Grade, mathType: MathType, difficulty: Difficulty) => void;
+  onStart: (grade: Grade, mathType: MathType, difficulty: Difficulty, answerMode: AnswerMode) => void;
 }
 
 const grades: Grade[] = ["K", "1", "2", "3", "4", "5"];
@@ -15,14 +15,16 @@ const mathTypes: MathType[] = [
   "addition", "subtraction", "multiplication", "division",
   "algebra", "geometry", "fractions", "order_of_operations",
   "word_problems", "comparison", "money_time", "decimals",
-  "percentages", "measurement",
+  "percentages", "measurement", "mixed",
 ];
 const difficulties: Difficulty[] = ["easy", "medium", "hard"];
+const answerModes: AnswerMode[] = ["typing", "multiple_choice"];
 
 const SetupScreen = ({ username, onStart }: Props) => {
   const [grade, setGrade] = useState<Grade | null>(null);
   const [mathType, setMathType] = useState<MathType | null>(null);
   const [difficulty, setDifficulty] = useState<Difficulty | null>(null);
+  const [answerMode, setAnswerMode] = useState<AnswerMode>("typing");
 
   const allSelected = grade && mathType && difficulty;
   const message = encouragingMessages[Math.floor(Math.random() * encouragingMessages.length)];
@@ -75,6 +77,17 @@ const SetupScreen = ({ username, onStart }: Props) => {
           </div>
         </Section>
 
+        {/* Answer mode */}
+        <Section title="How do you want to answer? ✍️">
+          <div className="grid grid-cols-2 gap-2">
+            {answerModes.map((m) => (
+              <OptionButton key={m} selected={answerMode === m} onClick={() => setAnswerMode(m)} wide>
+                {answerModeConfig[m].emoji} {answerModeConfig[m].label}
+              </OptionButton>
+            ))}
+          </div>
+        </Section>
+
         {allSelected && (
           <motion.div
             initial={{ opacity: 0, y: 10 }}
@@ -87,7 +100,7 @@ const SetupScreen = ({ username, onStart }: Props) => {
             <motion.button
               whileHover={{ scale: 1.03 }}
               whileTap={{ scale: 0.97 }}
-              onClick={() => onStart(grade!, mathType!, difficulty!)}
+              onClick={() => onStart(grade!, mathType!, difficulty!, answerMode)}
               className="w-full py-4 rounded-2xl bg-primary text-primary-foreground font-heading font-bold text-xl shadow-lg hover:shadow-xl transition-all"
             >
               Start Practice 🎉

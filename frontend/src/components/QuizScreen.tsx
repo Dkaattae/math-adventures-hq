@@ -96,10 +96,9 @@ const QuizScreen = ({ questions, onFinish }: Props) => {
     setInputVal(answers[current] ?? "");
   }, [current, answers]);
 
-  const submitAnswer = () => {
-    if (!inputVal.trim()) return;
+  const recordAndAdvance = (value: string) => {
     const newAnswers = [...answers];
-    newAnswers[current] = inputVal.trim();
+    newAnswers[current] = value;
     setAnswers(newAnswers);
 
     setFeedback("saved");
@@ -108,6 +107,13 @@ const QuizScreen = ({ questions, onFinish }: Props) => {
       if (current < 9) setCurrent(current + 1);
     }, 400);
   };
+
+  const submitAnswer = () => {
+    if (!inputVal.trim()) return;
+    recordAndAdvance(inputVal.trim());
+  };
+
+  const chooseOption = (option: string) => recordAndAdvance(option);
 
   const goNext = () => {
     if (current < 9) setCurrent(current + 1);
@@ -123,6 +129,8 @@ const QuizScreen = ({ questions, onFinish }: Props) => {
   const totalSecs = totalTimer % 60;
   const progress = ((current + 1) / 10) * 100;
   const qTimerUrgent = questionTimer <= 5;
+  const options = questions[current].options;
+  const isMultipleChoice = Array.isArray(options) && options.length > 0;
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="min-h-screen flex flex-col p-4 md:p-6">
@@ -165,15 +173,38 @@ const QuizScreen = ({ questions, onFinish }: Props) => {
                 {questions[current].question}
               </p>
             </div>
-            <input
-              type="text"
-              value={inputVal}
-              onChange={(e) => setInputVal(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && submitAnswer()}
-              placeholder="Your answer..."
-              className="w-full px-5 py-4 text-xl text-center rounded-2xl border-2 border-border bg-card font-heading focus:outline-none focus:border-primary focus:ring-2 focus:ring-ring/30 transition-all"
-              autoFocus
-            />
+            {isMultipleChoice ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {options!.map((opt) => {
+                  const chosen = answers[current] === opt;
+                  return (
+                    <motion.button
+                      key={opt}
+                      whileHover={{ scale: 1.03 }}
+                      whileTap={{ scale: 0.97 }}
+                      onClick={() => chooseOption(opt)}
+                      className={`px-5 py-4 text-xl rounded-2xl border-2 font-heading transition-all ${
+                        chosen
+                          ? "bg-primary text-primary-foreground border-primary shadow-md"
+                          : "bg-card border-border hover:border-primary/40"
+                      }`}
+                    >
+                      {opt}
+                    </motion.button>
+                  );
+                })}
+              </div>
+            ) : (
+              <input
+                type="text"
+                value={inputVal}
+                onChange={(e) => setInputVal(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && submitAnswer()}
+                placeholder="Your answer..."
+                className="w-full px-5 py-4 text-xl text-center rounded-2xl border-2 border-border bg-card font-heading focus:outline-none focus:border-primary focus:ring-2 focus:ring-ring/30 transition-all"
+                autoFocus
+              />
+            )}
           </motion.div>
         </AnimatePresence>
 
@@ -190,7 +221,9 @@ const QuizScreen = ({ questions, onFinish }: Props) => {
 
       {/* Controls */}
       <div className="flex flex-wrap gap-3 justify-center mt-6">
-        <QuizButton onClick={submitAnswer} primary>Submit Answer</QuizButton>
+        {!isMultipleChoice && (
+          <QuizButton onClick={submitAnswer} primary>Submit Answer</QuizButton>
+        )}
         <QuizButton onClick={goNext}>Next ➡️</QuizButton>
         <QuizButton onClick={toggleFlag}>
           {flagged.has(current) ? "🚩 Unflag" : "🏳️ Flag"}

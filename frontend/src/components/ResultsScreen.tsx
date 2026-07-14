@@ -2,20 +2,27 @@ import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import confetti from "canvas-confetti";
 import type { QuizResult } from "@/lib/api";
+import { recommendNext, type Difficulty, type Grade } from "@/data/quizConfig";
 
 interface Props {
   result: QuizResult;
+  /** The level just played — drives the adaptive recommendation. */
+  level?: { grade: Grade; difficulty: Difficulty };
+  /** Start a new quiz at the recommended level (same topic + answer mode). */
+  onTryLevel?: (grade: Grade, difficulty: Difficulty) => void;
   onRedo: () => void;
   onHome: () => void;
 }
 
-const ResultsScreen = ({ result, onRedo, onHome }: Props) => {
+const ResultsScreen = ({ result, level, onTryLevel, onRedo, onHome }: Props) => {
   const [showExplanations, setShowExplanations] = useState(false);
 
   const results = result.results.map((r) => ({ ...r, correct: r.isCorrect }));
   const score = result.score;
   const mins = Math.floor(result.timeUsedSeconds / 60);
   const secs = result.timeUsedSeconds % 60;
+
+  const recommendation = level ? recommendNext(level.grade, level.difficulty, score) : null;
 
   useEffect(() => {
     if (score >= 7) {
@@ -48,6 +55,29 @@ const ResultsScreen = ({ result, onRedo, onHome }: Props) => {
            "Don't give up! You'll get better! 🤗"}
         </p>
       </motion.div>
+
+      {/* Adaptive recommendation */}
+      {recommendation && (
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.3, type: "spring", bounce: 0.4 }}
+          className="w-full max-w-lg mb-8 p-5 rounded-2xl border-2 border-secondary/50 bg-secondary/10 text-center"
+        >
+          <p className="text-xl font-heading font-bold mb-1">{recommendation.headline}</p>
+          <p className="font-body text-muted-foreground mb-4">{recommendation.detail}</p>
+          {recommendation.cta && onTryLevel && (
+            <motion.button
+              whileHover={{ scale: 1.04 }}
+              whileTap={{ scale: 0.96 }}
+              onClick={() => onTryLevel(recommendation.grade, recommendation.difficulty)}
+              className="px-6 py-3 rounded-2xl bg-primary text-primary-foreground font-heading font-bold text-base shadow-lg"
+            >
+              {recommendation.cta}
+            </motion.button>
+          )}
+        </motion.div>
+      )}
 
       {/* Question Review */}
       <div className="w-full max-w-lg space-y-3 mb-8">

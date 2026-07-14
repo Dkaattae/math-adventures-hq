@@ -37,7 +37,7 @@ def _badge_for(score: int) -> str | None:
 
 
 def _public_questions(internal_qs) -> list[Question]:
-    return [Question(id=q.id, question=q.question) for q in internal_qs]
+    return [Question(id=q.id, question=q.question, options=q.options) for q in internal_qs]
 
 
 @router.post("", response_model=Quiz, status_code=201)
@@ -51,7 +51,9 @@ def create_quiz(payload: QuizCreate, db: Session = Depends(get_session)) -> Quiz
             ).model_dump(),
         )
     quiz_id = uuid4()
-    internal_qs = generate_questions(payload.mathType, payload.difficulty, payload.grade)
+    internal_qs = generate_questions(
+        payload.mathType, payload.difficulty, payload.grade, answer_mode=payload.answerMode
+    )
     row = storage.save_quiz(
         db, quiz_id, payload.username, payload.grade, payload.mathType, payload.difficulty, internal_qs
     )

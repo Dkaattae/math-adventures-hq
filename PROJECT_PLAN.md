@@ -13,21 +13,17 @@ Completed work moves to the **Done** section at the bottom.
 
 ### Mid term — product features
 
-- **Multiple-choice mode** — backend generates plausible distractors
-  (off-by-one, swapped-operation results); `QuestionInternal` gains an
-  `options` list. Big UX win for younger kids who struggle to type.
-- **Mixed-topic quizzes** — an "everything" option that samples across
-  factories, weighted by grade.
 - **Grade-appropriate type gating in the UI** — `SetupScreen` currently
   offers every type to every grade; algebra/order-of-operations for
   Kindergarten is questionable. Either hide types below a minimum grade or
   map them to gentler variants.
-- **Adaptive difficulty** — track rolling accuracy per user/topic (the
-  data already lands in `quiz_results.results_json`) and auto-adjust the
-  tier instead of asking the kid to self-select.
 - **Leaderboard filters in the UI** — the API already supports
   `mathType` / `difficulty` / `grade` query params, but the home screen
   shows one global top-5, which mixes K-easy scores with G5-hard scores.
+- **Full adaptive difficulty** — the end-of-quiz recommendation (see Done)
+  reacts to a single score. A fuller version would track rolling accuracy
+  per user/topic (the data already lands in `quiz_results.results_json`)
+  and auto-select the starting tier next time.
 
 ### Long term
 
@@ -112,14 +108,34 @@ here.
 
 | Phase | Items | Why first |
 |---|---|---|
-| 1 — content & fairness | Multiple-choice mode; grade gating in setup; leaderboard filters in UI; mixed-topic quizzes | Directly visible to kids; makes the leaderboard meaningful |
-| 2 — depth | Adaptive difficulty; progress history; PIN accounts; visual geometry | Builds on data and infrastructure from phase 1 |
+| 1 — content & fairness | Grade gating in setup; leaderboard filters in UI | Directly visible to kids; makes the leaderboard meaningful |
+| 2 — depth | Full adaptive difficulty; progress history; PIN accounts; visual geometry | Builds on data and infrastructure from phase 1 |
 
 ---
 
 ## Done
 
-Completed items from the original 2026-07-12 audit, newest first.
+Completed items, newest first.
+
+### 2026-07-14 — multiple choice, mixed topic, adaptive nudge
+
+- **Multiple-choice mode.** `QuizCreate` takes an `answerMode`; questions
+  gain an optional `options` list. Distractors are generated generically
+  (near-miss numbers for integers, nearby values for decimals/fractions,
+  and same-quiz sibling answers — which covers categorical answers like
+  "even"/"odd" or shape names without hardcoded pools). Options are
+  never the wrong count and always contain exactly one correct choice
+  (both property-tested across all types). The setup screen offers a
+  "Type it / Multiple choice" toggle; QuizScreen renders option buttons.
+- **Mixed-topic quizzes.** A 🎲 `mixed` MathType samples each of the 10
+  questions from a random topic (dedup across types), available in both
+  answer modes.
+- **Adaptive end-of-quiz nudge.** `recommendNext(grade, difficulty,
+  score)` suggests a next level — level up on a high score, ease down on
+  a low one, steady practice in between — shown as an encouraging popup
+  on the results screen with a one-tap button to start it. This is the
+  lightweight, single-score version; full history-based adaptivity is
+  still open (see §1).
 
 ### 2026-07-14 — remaining audit bugs + CI
 

@@ -3,7 +3,7 @@ import UsernameScreen from "@/components/UsernameScreen";
 import SetupScreen from "@/components/SetupScreen";
 import QuizScreen from "@/components/QuizScreen";
 import ResultsScreen from "@/components/ResultsScreen";
-import type { MathType, Difficulty, Grade } from "@/data/quizConfig";
+import type { MathType, Difficulty, Grade, AnswerMode } from "@/data/quizConfig";
 import { createQuiz, submitQuiz, type Question, type QuizResult } from "@/lib/api";
 
 type Screen = "username" | "setup" | "quiz" | "results" | "error";
@@ -14,7 +14,9 @@ const Index = () => {
   const [quizId, setQuizId] = useState<string | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [quizResult, setQuizResult] = useState<QuizResult | null>(null);
-  const [config, setConfig] = useState<{ grade: Grade; mathType: MathType; difficulty: Difficulty } | null>(null);
+  const [config, setConfig] = useState<{
+    grade: Grade; mathType: MathType; difficulty: Difficulty; answerMode: AnswerMode;
+  } | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
 
   const handleUsername = (name: string) => {
@@ -22,10 +24,12 @@ const Index = () => {
     setScreen("setup");
   };
 
-  const startQuiz = async (grade: Grade, mathType: MathType, difficulty: Difficulty) => {
+  const startQuiz = async (
+    grade: Grade, mathType: MathType, difficulty: Difficulty, answerMode: AnswerMode,
+  ) => {
     try {
-      const quiz = await createQuiz({ username, grade, mathType, difficulty });
-      setConfig({ grade, mathType, difficulty });
+      const quiz = await createQuiz({ username, grade, mathType, difficulty, answerMode });
+      setConfig({ grade, mathType, difficulty, answerMode });
       setQuizId(quiz.id);
       setQuestions(quiz.questions);
       setScreen("quiz");
@@ -48,7 +52,11 @@ const Index = () => {
   }, [quizId]);
 
   const handleRedo = () => {
-    if (config) startQuiz(config.grade, config.mathType, config.difficulty);
+    if (config) startQuiz(config.grade, config.mathType, config.difficulty, config.answerMode);
+  };
+
+  const handleTryLevel = (grade: Grade, difficulty: Difficulty) => {
+    if (config) startQuiz(grade, config.mathType, difficulty, config.answerMode);
   };
 
   return (
@@ -59,6 +67,8 @@ const Index = () => {
       {screen === "results" && quizResult && (
         <ResultsScreen
           result={quizResult}
+          level={config ? { grade: config.grade, difficulty: config.difficulty } : undefined}
+          onTryLevel={handleTryLevel}
           onRedo={handleRedo}
           onHome={() => setScreen("username")}
         />
