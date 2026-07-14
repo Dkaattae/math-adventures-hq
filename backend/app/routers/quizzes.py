@@ -122,12 +122,18 @@ def submit_quiz(
         )
 
     submitted_at = datetime.now(timezone.utc)
+    # timeUsedSeconds is client-reported and feeds the leaderboard's
+    # tie-breaker, so cap it at the window the server actually observed
+    # between quiz creation and submission (rounded up a second to not
+    # penalize honest sub-second clock skew).
+    server_elapsed = max(0, int((submitted_at - row.created_at).total_seconds()) + 1)
+    time_used = min(payload.timeUsedSeconds, server_elapsed)
     result = QuizResult(
         quizId=quiz_id,
         username=row.username,
         score=score,
         total=10,
-        timeUsedSeconds=payload.timeUsedSeconds,
+        timeUsedSeconds=time_used,
         badge=_badge_for(score),
         results=results,
         submittedAt=submitted_at,
@@ -139,8 +145,8 @@ def submit_quiz(
             name=row.username,
             score=score,
             total=10,
-            timeUsedSeconds=payload.timeUsedSeconds,
-            time=storage.format_time(payload.timeUsedSeconds),
+            timeUsedSeconds=time_used,
+            time=storage.format_time(time_used),
             badge=_badge_for(score),
             mathType=MathType(row.math_type),
             difficulty=Difficulty(row.difficulty),

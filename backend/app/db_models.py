@@ -15,6 +15,29 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
+class UTCDateTime(TypeDecorator):
+    """Timezone-aware UTC datetimes on every backend.
+
+    Postgres honors DateTime(timezone=True) and returns aware values, but
+    sqlite silently drops the tzinfo and returns naive ones. Store
+    everything as UTC and re-attach the UTC tzinfo on read so callers can
+    do aware datetime arithmetic regardless of the backend.
+    """
+
+    impl = DateTime(timezone=True)
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        if value is not None and value.tzinfo is not None:
+            return value.astimezone(timezone.utc)
+        return value
+
+    def process_result_value(self, value, dialect):
+        if value is not None and value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value
+
+
 class GUID(TypeDecorator):
     """Portable UUID — uses native UUID on Postgres, CHAR(36) elsewhere."""
 
@@ -45,7 +68,7 @@ class UserRow(Base):
     __tablename__ = "users"
     username: Mapped[str] = mapped_column(String(20), primary_key=True)
     username_lower: Mapped[str] = mapped_column(String(20), unique=True, index=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=_utcnow)
 
 
 class QuizRow(Base):
@@ -57,7 +80,7 @@ class QuizRow(Base):
     difficulty: Mapped[str] = mapped_column(String(10))
     # Stores full questions incl. correct answer + explanation.
     questions_json: Mapped[list] = mapped_column(JSON)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=_utcnow)
     submitted: Mapped[bool] = mapped_column(Boolean, default=False)
 
     result: Mapped["QuizResultRow | None"] = relationship(
@@ -74,7 +97,7 @@ class QuizResultRow(Base):
     time_used_seconds: Mapped[int] = mapped_column(Integer)
     badge: Mapped[str | None] = mapped_column(String(8), nullable=True)
     results_json: Mapped[list] = mapped_column(JSON)
-    submitted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    submitted_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=_utcnow)
 
     quiz: Mapped[QuizRow] = relationship(back_populates="result")
 
@@ -90,4 +113,4 @@ class LeaderboardRow(Base):
     math_type: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
     difficulty: Mapped[str | None] = mapped_column(String(10), nullable=True, index=True)
     grade: Mapped[str | None] = mapped_column(String(2), nullable=True, index=True)
-    achieved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    achieved_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=_utcnow)

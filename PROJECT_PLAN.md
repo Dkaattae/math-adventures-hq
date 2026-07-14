@@ -1,6 +1,6 @@
 # Math Adventures HQ — Project Plan
 
-_Last updated: 2026-07-13_
+_Last updated: 2026-07-14_
 
 This document collects the roadmap for expanding the quiz, the known bugs
 and rough edges found while auditing the codebase, the testing gaps, and
@@ -45,20 +45,8 @@ Completed work moves to the **Done** section at the bottom.
 
 ## 2. Known bugs & issues
 
-Found while auditing the current code; ordered by user impact.
-(Items 1–4, 7 and 9 from the original audit are fixed — see Done.)
-
-1. **Client-reported quiz time is trusted.** `timeUsedSeconds` comes from
-   the browser and the leaderboard ranks by it (score desc, time asc), so
-   it's trivially spoofable. The server knows `createdAt` and
-   `submittedAt` — clamp the reported time to that window.
-2. **`GET /api/users/check` is dead code** — implemented and tested on the
-   backend but never called by the frontend. Either use it for live
-   availability feedback while typing, or remove it.
-3. **sqlite dev runs return timezone-naive datetimes** while Postgres
-   returns aware ones (`DateTime(timezone=True)` is a no-op on sqlite).
-   Normalize to UTC in the storage layer if sqlite stays a supported dev
-   path.
+All items from the original audit are fixed — see Done. New findings go
+here.
 
 ---
 
@@ -94,9 +82,7 @@ Found while auditing the current code; ordered by user impact.
 
 ### Infrastructure
 
-- **There is no CI.** Add a GitHub Actions workflow running backend
-  `pytest`, frontend `vitest` + `tsc --noEmit` + `eslint` on every PR.
-  This is the highest-leverage single item in this document.
+- ~~There is no CI~~ — done, see Done section.
 
 ---
 
@@ -126,15 +112,33 @@ Found while auditing the current code; ordered by user impact.
 
 | Phase | Items | Why first |
 |---|---|---|
-| 1 — quick wins | CI workflow; server-side time clamp (§2.1); users/check cleanup (§2.2) | Small, high-impact, unblocks safe iteration on everything else |
-| 2 — content & fairness | Multiple-choice mode; grade gating in setup; leaderboard filters in UI; mixed-topic quizzes | Directly visible to kids; makes the leaderboard meaningful |
-| 3 — depth | Adaptive difficulty; progress history; PIN accounts; visual geometry | Builds on data and infrastructure from phases 1–2 |
+| 1 — content & fairness | Multiple-choice mode; grade gating in setup; leaderboard filters in UI; mixed-topic quizzes | Directly visible to kids; makes the leaderboard meaningful |
+| 2 — depth | Adaptive difficulty; progress history; PIN accounts; visual geometry | Builds on data and infrastructure from phase 1 |
 
 ---
 
 ## Done
 
 Completed items from the original 2026-07-12 audit, newest first.
+
+### 2026-07-14 — remaining audit bugs + CI
+
+- **CI added** (`.github/workflows/ci.yml`): backend pytest — including
+  the Postgres integration suite against a `postgres:16` service —
+  plus frontend `tsc --noEmit`, `eslint`, `vitest`, and a production
+  build, on every PR and push to main.
+- **Client-reported quiz time clamped server-side.** `timeUsedSeconds`
+  is now capped at the window the server observed between quiz creation
+  and submission, so leaderboard times can't claim more elapsed time
+  than actually passed. (Pre-existing eslint errors in shadcn
+  scaffolding were also fixed so lint could gate CI.)
+- **`GET /api/users/check` is no longer dead code** — the username
+  screen now does a debounced availability lookup while typing and
+  shows "👋 Welcome back!" or "✨ New player!" before the kid submits.
+- **sqlite naive datetimes normalized.** A `UTCDateTime` type decorator
+  stores UTC and re-attaches tzinfo on read, so aware datetime
+  arithmetic (like the time clamp) works identically on Postgres and
+  sqlite, and API timestamps always carry an explicit UTC offset.
 
 ### 2026-07-13 — quiz timer & returning-player fixes
 

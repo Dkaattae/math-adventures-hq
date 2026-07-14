@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ApiError, createUser } from "@/lib/api";
+import { ApiError, checkUsername, createUser } from "@/lib/api";
 import Leaderboard from "./Leaderboard";
 
 interface Props {
@@ -11,6 +11,29 @@ const UsernameScreen = ({ onSubmit }: Props) => {
   const [name, setName] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  // "Welcome back" vs "new player" hint, shown while typing.
+  const [hint, setHint] = useState<"new" | "returning" | null>(null);
+  const checkSeq = useRef(0);
+
+  // Debounced availability lookup so a returning kid sees "welcome back"
+  // before they even hit the button.
+  useEffect(() => {
+    const trimmed = name.trim();
+    setHint(null);
+    if (!trimmed) return;
+    const seq = ++checkSeq.current;
+    const t = setTimeout(async () => {
+      try {
+        const res = await checkUsername(trimmed);
+        if (checkSeq.current === seq) {
+          setHint(res.available ? "new" : "returning");
+        }
+      } catch {
+        // Hint is decorative — stay quiet if the lookup fails.
+      }
+    }, 400);
+    return () => clearTimeout(t);
+  }, [name]);
 
   const handleSubmit = async () => {
     const trimmed = name.trim();
@@ -84,6 +107,26 @@ const UsernameScreen = ({ onSubmit }: Props) => {
                 className="text-destructive text-sm font-body"
               >
                 {error}
+              </motion.p>
+            )}
+            {!error && hint === "returning" && (
+              <motion.p
+                initial={{ opacity: 0, y: -5 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                className="text-muted-foreground text-sm font-body"
+              >
+                👋 Welcome back, {name.trim()}!
+              </motion.p>
+            )}
+            {!error && hint === "new" && (
+              <motion.p
+                initial={{ opacity: 0, y: -5 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                className="text-muted-foreground text-sm font-body"
+              >
+                ✨ New player — nice to meet you!
               </motion.p>
             )}
           </AnimatePresence>

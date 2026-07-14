@@ -1,3 +1,4 @@
+from datetime import timedelta
 from uuid import UUID
 
 from app import storage
@@ -16,8 +17,12 @@ def _run_quiz(
             "difficulty": "easy",
         },
     ).json()
+    row = storage.get_quiz(db_session, UUID(quiz["id"]))
+    # The server clamps reported time to the created->submitted window,
+    # so backdate creation far enough for the claimed time to be real.
+    row.created_at = row.created_at - timedelta(seconds=time_used + 30)
+    db_session.commit()
     if correct:
-        row = storage.get_quiz(db_session, UUID(quiz["id"]))
         answers = [str(q.correctAnswer) for q in storage.quiz_questions(row)]
     else:
         answers = ["wrong"] * 10
