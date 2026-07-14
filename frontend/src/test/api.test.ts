@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ApiError, createQuiz, createUser, getLeaderboard, submitQuiz } from "@/lib/api";
+import { ApiError, checkUsername, createQuiz, createUser, getLeaderboard, submitQuiz } from "@/lib/api";
 
 function jsonResponse(body: unknown, status = 200) {
   return {
@@ -66,6 +66,16 @@ describe("api client", () => {
 
     expect(fetchMock).toHaveBeenCalledWith("/api/quizzes/quiz-1/submit", expect.objectContaining({ method: "POST" }));
     expect(result.score).toBe(9);
+  });
+
+  it("checkUsername queries availability with the name URL-encoded", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ username: "Mia B", available: true }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await checkUsername("Mia B");
+
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/users/check?username=Mia+B");
+    expect(result.available).toBe(true);
   });
 
   it("getLeaderboard builds query params only for provided filters", async () => {

@@ -111,3 +111,50 @@ def test_submit_unknown_quiz_404(client):
         json={"answers": [None] * 10, "timeUsedSeconds": 10},
     )
     assert r.status_code == 404
+
+
+def test_submit_clamps_reported_time_to_server_window(client, db_session):
+    """A client claiming more time than actually elapsed gets clamped."""
+    created = _new_quiz(client).json()
+    r = client.post(
+        f"/api/quizzes/{created['id']}/submit",
+        json={"answers": [None] * 10, "timeUsedSeconds": 9999},
+    )
+    assert r.status_code == 200
+    # The quiz was created moments ago, so the observed window is ~0-2s.
+    assert r.json()["timeUsedSeconds"] <= 5
+
+    # The leaderboard entry records the clamped value too.
+    board = client.get("/api/leaderboard").json()
+    assert all(e["timeUsedSeconds"] <= 5 for e in board)
+
+
+def test_submit_keeps_honest_reported_time(client, db_session):
+    """A reported time within the observed window passes through unchanged."""
+    from datetime import timedelta
+
+    created = _new_quiz(client).json()
+    row = storage.get_quiz(db_session, UUID(created["id"]))
+    row.created_at = row.created_at - timedelta(seconds=120)
+    db_session.commit()
+
+    r = client.post(
+        f"/api/quizzes/{created['id']}/submit",
+        json={"answers": [None] * 10, "timeUsedSeconds": 90},
+    )
+    assert r.status_code == 200
+    assert r.json()["timeUsedSeconds"] == 90
+
+
+def test_datetimes_are_timezone_aware_even_on_sqlite(client, db_session):
+    """UTCDateTime must re-attach tzinfo that sqlite drops (plan bug: naive
+    datetimes broke aware arithmetic and made API timestamps ambiguous)."""
+    created = _new_quiz(client).json()
+    # Force a round-trip through the database rather than reading the
+    # cached Python object.
+    db_session.expire_all()
+    row = storage.get_quiz(db_session, UUID(created["id"]))
+    assert row.created_at.tzinfo is not None
+
+    # API timestamps carry an explicit UTC offset.
+    assert created["createdAt"].endswith("+00:00") or created["createdAt"].endswith("Z")

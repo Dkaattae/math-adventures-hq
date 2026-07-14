@@ -13,6 +13,29 @@ function jsonResponse(body: unknown, status: number) {
   } as Response;
 }
 
+/** Route the fetch mock by URL: availability checks vs. user creation. */
+function stubApi({ available, createStatus }: { available: boolean; createStatus: number }) {
+  vi.stubGlobal("fetch", vi.fn().mockImplementation((url: string) => {
+    if (String(url).includes("/api/users/check")) {
+      return Promise.resolve(jsonResponse({ username: "x", available }, 200));
+    }
+    if (createStatus === 409) {
+      return Promise.resolve(
+        jsonResponse({ detail: { code: "username_taken", message: "taken" } }, 409),
+      );
+    }
+    return Promise.resolve(
+      jsonResponse({ username: "x", createdAt: "2026-01-01T00:00:00Z" }, createStatus),
+    );
+  }));
+}
+
+function typeName(value: string) {
+  fireEvent.change(screen.getByPlaceholderText("Type your name here..."), {
+    target: { value },
+  });
+}
+
 describe("UsernameScreen", () => {
   afterEach(() => {
     cleanup();
@@ -20,33 +43,47 @@ describe("UsernameScreen", () => {
   });
 
   it("lets a returning player continue with an existing name (409)", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(
-      jsonResponse({ detail: { code: "username_taken", message: "taken" } }, 409),
-    ));
+    stubApi({ available: false, createStatus: 409 });
     const onSubmit = vi.fn();
     render(<UsernameScreen onSubmit={onSubmit} />);
 
-    fireEvent.change(screen.getByPlaceholderText("Type your name here..."), {
-      target: { value: "Emma" },
-    });
+    typeName("Emma");
     fireEvent.click(screen.getByText("Let's Go! 🚀"));
 
     await waitFor(() => expect(onSubmit).toHaveBeenCalledWith("Emma"));
   });
 
   it("proceeds for a brand-new name (201)", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(
-      jsonResponse({ username: "Zoe", createdAt: "2026-01-01T00:00:00Z" }, 201),
-    ));
+    stubApi({ available: true, createStatus: 201 });
     const onSubmit = vi.fn();
     render(<UsernameScreen onSubmit={onSubmit} />);
 
-    fireEvent.change(screen.getByPlaceholderText("Type your name here..."), {
-      target: { value: "Zoe" },
-    });
+    typeName("Zoe");
     fireEvent.click(screen.getByText("Let's Go! 🚀"));
 
     await waitFor(() => expect(onSubmit).toHaveBeenCalledWith("Zoe"));
+  });
+
+  it("shows a welcome-back hint while typing an existing name", async () => {
+    stubApi({ available: false, createStatus: 201 });
+    render(<UsernameScreen onSubmit={vi.fn()} />);
+
+    typeName("Emma");
+    await waitFor(
+      () => expect(screen.getByText(/Welcome back, Emma!/)).toBeInTheDocument(),
+      { timeout: 2000 },
+    );
+  });
+
+  it("shows a new-player hint while typing an unused name", async () => {
+    stubApi({ available: true, createStatus: 201 });
+    render(<UsernameScreen onSubmit={vi.fn()} />);
+
+    typeName("Zoe");
+    await waitFor(
+      () => expect(screen.getByText(/New player/)).toBeInTheDocument(),
+      { timeout: 2000 },
+    );
   });
 
   it("shows an error when the server is unreachable", async () => {
@@ -54,9 +91,7 @@ describe("UsernameScreen", () => {
     const onSubmit = vi.fn();
     render(<UsernameScreen onSubmit={onSubmit} />);
 
-    fireEvent.change(screen.getByPlaceholderText("Type your name here..."), {
-      target: { value: "Ana" },
-    });
+    typeName("Ana");
     fireEvent.click(screen.getByText("Let's Go! 🚀"));
 
     await waitFor(() =>

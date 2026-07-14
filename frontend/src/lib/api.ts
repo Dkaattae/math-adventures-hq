@@ -92,6 +92,11 @@ export function createUser(username: string) {
   });
 }
 
+export function checkUsername(username: string) {
+  const qs = new URLSearchParams({ username });
+  return request<{ username: string; available: boolean }>(`/api/users/check?${qs}`);
+}
+
 export function createQuiz(payload: {
   username: string;
   grade: Grade;
