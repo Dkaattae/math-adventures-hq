@@ -87,6 +87,7 @@ paths:
                 grade:      { $ref: "#/components/schemas/Grade" }
                 mathType:   { $ref: "#/components/schemas/MathType" }
                 difficulty: { $ref: "#/components/schemas/Difficulty" }
+                answerMode: { $ref: "#/components/schemas/AnswerMode" }
       responses:
         "201":
           description: Quiz created
@@ -219,11 +220,16 @@ components:
     MathType:
       type: string
       enum: [addition, subtraction, multiplication, division, algebra, geometry, fractions, order_of_operations,
-             word_problems, comparison, money_time, decimals, percentages, measurement]
+             word_problems, comparison, money_time, decimals, percentages, measurement, mixed]
 
     Difficulty:
       type: string
       enum: [easy, medium, hard]
+
+    AnswerMode:
+      type: string
+      enum: [typing, multiple_choice]
+      default: typing
 
     User:
       type: object
@@ -238,6 +244,12 @@ components:
       properties:
         id:       { type: integer, minimum: 0 }
         question: { type: string, example: "7 + 5 = ?" }
+        options:
+          type: array
+          nullable: true
+          description: Answer choices for multiple-choice quizzes; absent/null for typed quizzes.
+          items: { type: string }
+          example: ["10", "11", "12", "13"]
 
     QuestionResult:
       allOf:

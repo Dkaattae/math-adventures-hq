@@ -17,12 +17,31 @@ looping forever.
 from __future__ import annotations
 
 import random
+import re
 from math import gcd
 from typing import Callable
 
-from .models import Difficulty, Grade, MathType, QuestionInternal
+from .models import AnswerMode, Difficulty, Grade, MathType, QuestionInternal
 
 _MAX_ATTEMPTS = 200
+
+# Every math type that a "mixed" quiz can draw from (mixed itself excluded).
+_MIXED_TYPES: list[MathType] = [
+    MathType.addition,
+    MathType.subtraction,
+    MathType.multiplication,
+    MathType.division,
+    MathType.algebra,
+    MathType.geometry,
+    MathType.fractions,
+    MathType.order_of_operations,
+    MathType.word_problems,
+    MathType.comparison,
+    MathType.money_time,
+    MathType.decimals,
+    MathType.percentages,
+    MathType.measurement,
+]
 
 
 def _difficulty_range(difficulty: Difficulty, grade: Grade) -> tuple[int, int]:
@@ -1237,31 +1256,23 @@ def _pick_factory(math_type: MathType, difficulty: Difficulty, grade: Grade) -> 
     }[math_type]
 
 
-def generate_questions(
-    math_type: MathType,
-    difficulty: Difficulty,
-    grade: Grade,
-    *,
-    rng: random.Random | None = None,
-) -> list[QuestionInternal]:
-    rng = rng or random.Random()
-    lo, hi = _difficulty_range(difficulty, grade)
-
+def _generate_geometry(difficulty: Difficulty, grade: Grade, rng: random.Random):
     # Geometry draws from a curated, level-aware pool. Each tier has
     # well over 10 entries, so sampling without replacement always
     # yields 10 unique questions.
-    if math_type == MathType.geometry:
-        pool = _geometry_pool(difficulty, grade)
-        picks = rng.sample(pool, k=10)
-        return [
-            QuestionInternal(id=i, question=text, correctAnswer=ans, explanation=expl)
-            for i, (text, ans, expl) in enumerate(picks)
-        ]
+    pool = _geometry_pool(difficulty, grade)
+    picks = rng.sample(pool, k=10)
+    return [
+        QuestionInternal(id=i, question=text, correctAnswer=ans, explanation=expl)
+        for i, (text, ans, expl) in enumerate(picks)
+    ]
 
+
+def _generate_typed(math_type: MathType, difficulty: Difficulty, grade: Grade, rng: random.Random):
+    lo, hi = _difficulty_range(difficulty, grade)
     factory = _pick_factory(math_type, difficulty, grade)
     questions: list[QuestionInternal] = []
     seen: set[tuple] = set()
-
     for i in range(10):
         signature, text, answer, explanation = factory(rng, lo, hi)
         attempts = 1
@@ -1270,10 +1281,154 @@ def generate_questions(
             attempts += 1
         seen.add(signature)
         questions.append(
-            QuestionInternal(
-                id=i, question=text, correctAnswer=answer, explanation=explanation
-            )
+            QuestionInternal(id=i, question=text, correctAnswer=answer, explanation=explanation)
         )
+    return questions
+
+
+def _generate_mixed(difficulty: Difficulty, grade: Grade, rng: random.Random):
+    """Sample each of the 10 questions from a randomly chosen topic.
+
+    Signatures already carry a per-type prefix, so a single `seen` set
+    dedupes across types; question text is tracked too as a safety net
+    (geometry items live outside the signature system).
+    """
+    lo, hi = _difficulty_range(difficulty, grade)
+    questions: list[QuestionInternal] = []
+    seen_sig: set[tuple] = set()
+    seen_text: set[str] = set()
+    for i in range(10):
+        for _ in range(_MAX_ATTEMPTS):
+            math_type = rng.choice(_MIXED_TYPES)
+            if math_type == MathType.geometry:
+                text, answer, explanation = rng.choice(_geometry_pool(difficulty, grade))
+                signature = ("geo", text)
+            else:
+                factory = _pick_factory(math_type, difficulty, grade)
+                signature, text, answer, explanation = factory(rng, lo, hi)
+            if signature not in seen_sig and text not in seen_text:
+                break
+        seen_sig.add(signature)
+        seen_text.add(text)
+        questions.append(
+            QuestionInternal(id=i, question=text, correctAnswer=answer, explanation=explanation)
+        )
+    return questions
+
+
+# ---------- multiple-choice distractors ----------
+
+_FRACTION_RE = re.compile(r"^-?\d+/\d+$")
+_DECIMAL_RE = re.compile(r"^-?\d+\.\d+$")
+
+
+def _int_distractors(n: int, rng: random.Random) -> list[int]:
+    """Plausible off-by-a-little wrong integers (never negative if n >= 0)."""
+    deltas = [1, -1, 2, -2, 3, -3, 5, -5, 10, -10]
+    rng.shuffle(deltas)
+    out: list[int] = []
+    for d in deltas:
+        v = n + d
+        if v == n or (n >= 0 and v < 0) or v in out:
+            continue
+        out.append(v)
+    return out
+
+
+def _decimal_distractors(s: str, rng: random.Random) -> list[str]:
+    places = len(s.split(".")[1])
+    step = 10 ** (-places)
+    val = float(s)
+    out: list[str] = []
+    for mult in (1, -1, 2, -2, 5, -5):
+        v = round(val + mult * step, places)
+        if v <= 0 or abs(v - val) < step / 2:
+            continue
+        formatted = f"{v:.{places}f}"
+        if formatted != s and formatted not in out:
+            out.append(formatted)
+    return out
+
+
+def _fraction_distractors(s: str, rng: random.Random) -> list[str]:
+    num, den = (int(x) for x in s.split("/"))
+    correct_val = num / den
+    out: list[str] = []
+    for dn, dd in [(1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (-1, -1)]:
+        n2, d2 = num + dn, den + dd
+        if n2 < 1 or d2 < 2:
+            continue
+        cand = f"{n2}/{d2}"
+        if cand != s and abs(n2 / d2 - correct_val) > 1e-9 and cand not in out:
+            out.append(cand)
+    return out
+
+
+def _build_options(correct, sibling_answers, rng: random.Random) -> list[str] | None:
+    """Return shuffled options (correct + 1-3 distractors), or None if we
+    couldn't produce even one plausible distractor.
+
+    Distractors come first from type-appropriate near-misses, then from
+    the other correct answers in the same quiz (same topic/difficulty →
+    naturally plausible), which also covers categorical answers like
+    "even"/"odd", "<"/">"/"=", or shape names without hardcoded pools.
+    """
+    correct_str = str(correct)
+    distractors: list[str] = []
+
+    def add(value: str):
+        if value != correct_str and value not in distractors and len(distractors) < 3:
+            distractors.append(value)
+
+    if isinstance(correct, int):
+        for v in _int_distractors(correct, rng):
+            add(str(v))
+    elif _DECIMAL_RE.match(correct_str):
+        for v in _decimal_distractors(correct_str, rng):
+            add(v)
+    elif _FRACTION_RE.match(correct_str):
+        for v in _fraction_distractors(correct_str, rng):
+            add(v)
+
+    # Supplement with sibling answers (shuffled) to reach 3 where possible.
+    siblings = [str(s) for s in sibling_answers]
+    rng.shuffle(siblings)
+    for s in siblings:
+        add(s)
+
+    if not distractors:
+        return None
+    options = distractors + [correct_str]
+    rng.shuffle(options)
+    return options
+
+
+def _attach_options(questions: list[QuestionInternal], rng: random.Random) -> None:
+    all_answers = [q.correctAnswer for q in questions]
+    for i, q in enumerate(questions):
+        siblings = all_answers[:i] + all_answers[i + 1:]
+        q.options = _build_options(q.correctAnswer, siblings, rng)
+
+
+def generate_questions(
+    math_type: MathType,
+    difficulty: Difficulty,
+    grade: Grade,
+    *,
+    answer_mode: AnswerMode = AnswerMode.typing,
+    rng: random.Random | None = None,
+) -> list[QuestionInternal]:
+    rng = rng or random.Random()
+
+    if math_type == MathType.mixed:
+        questions = _generate_mixed(difficulty, grade, rng)
+    elif math_type == MathType.geometry:
+        questions = _generate_geometry(difficulty, grade, rng)
+    else:
+        questions = _generate_typed(math_type, difficulty, grade, rng)
+
+    if answer_mode == AnswerMode.multiple_choice:
+        _attach_options(questions, rng)
 
     return questions
 

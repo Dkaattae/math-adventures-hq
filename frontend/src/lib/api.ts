@@ -1,6 +1,6 @@
 // Thin fetch wrapper around the FastAPI backend (see /openapi.yaml).
 // In dev, Vite proxies /api to http://localhost:8000 (see vite.config.ts).
-import type { Difficulty, Grade, MathType } from "@/data/quizConfig";
+import type { AnswerMode, Difficulty, Grade, MathType } from "@/data/quizConfig";
 
 export class ApiError extends Error {
   status: number;
@@ -16,6 +16,8 @@ export class ApiError extends Error {
 export interface Question {
   id: number;
   question: string;
+  // Present only for multiple-choice quizzes.
+  options?: string[] | null;
 }
 
 export interface QuestionResult {
@@ -102,6 +104,7 @@ export function createQuiz(payload: {
   grade: Grade;
   mathType: MathType;
   difficulty: Difficulty;
+  answerMode?: AnswerMode;
 }) {
   return request<Quiz>("/api/quizzes", {
     method: "POST",

@@ -26,7 +26,10 @@ def test_create_quiz_returns_10_questions_without_answers(client):
     body = r.json()
     assert len(body["questions"]) == 10
     for q in body["questions"]:
-        assert set(q.keys()) == {"id", "question"}
+        # No answer key leaks; typed quizzes carry no options.
+        assert "correctAnswer" not in q
+        assert "explanation" not in q
+        assert q["options"] is None
     assert [q["id"] for q in body["questions"]] == list(range(10))
 
 

@@ -35,12 +35,18 @@ class MathType(str, Enum):
     decimals = "decimals"
     percentages = "percentages"
     measurement = "measurement"
+    mixed = "mixed"
 
 
 class Difficulty(str, Enum):
     easy = "easy"
     medium = "medium"
     hard = "hard"
+
+
+class AnswerMode(str, Enum):
+    typing = "typing"
+    multiple_choice = "multiple_choice"
 
 
 # ---------- users ----------
@@ -64,6 +70,9 @@ class UsernameAvailability(BaseModel):
 class Question(BaseModel):
     id: int = Field(ge=0)
     question: str
+    # Present only for multiple-choice quizzes: the shuffled answer
+    # choices (one of which is correct). None means "type your answer".
+    options: Optional[list[str]] = None
 
 
 class QuestionInternal(Question):
@@ -86,6 +95,7 @@ class QuizCreate(BaseModel):
     grade: Grade
     mathType: MathType
     difficulty: Difficulty
+    answerMode: AnswerMode = AnswerMode.typing
 
 
 class Quiz(BaseModel):

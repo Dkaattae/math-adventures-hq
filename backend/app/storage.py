@@ -48,6 +48,7 @@ def _question_to_json(q: QuestionInternal) -> dict:
         "question": q.question,
         "correctAnswer": q.correctAnswer,
         "explanation": q.explanation,
+        "options": q.options,
     }
 
 
