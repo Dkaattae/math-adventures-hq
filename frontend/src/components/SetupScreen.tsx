@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import {
   type MathType, type Difficulty, type Grade, type AnswerMode,
   mathTypeLabels, difficultyConfig, answerModeConfig, encouragingMessages,
+  ALL_MATH_TYPES, topicsForGrade, isTopicAvailable,
 } from "@/data/quizConfig";
 
 interface Props {
@@ -11,12 +12,6 @@ interface Props {
 }
 
 const grades: Grade[] = ["K", "1", "2", "3", "4", "5"];
-const mathTypes: MathType[] = [
-  "addition", "subtraction", "multiplication", "division",
-  "algebra", "geometry", "fractions", "order_of_operations",
-  "word_problems", "comparison", "money_time", "decimals",
-  "percentages", "measurement", "mixed",
-];
 const difficulties: Difficulty[] = ["easy", "medium", "hard"];
 const answerModes: AnswerMode[] = ["typing", "multiple_choice"];
 
@@ -25,6 +20,18 @@ const SetupScreen = ({ username, onStart }: Props) => {
   const [mathType, setMathType] = useState<MathType | null>(null);
   const [difficulty, setDifficulty] = useState<Difficulty | null>(null);
   const [answerMode, setAnswerMode] = useState<AnswerMode>("typing");
+
+  // Topics are gated by grade; before a grade is chosen we show them all
+  // so the kid can browse.
+  const visibleTypes = grade ? topicsForGrade(grade) : ALL_MATH_TYPES;
+  const someTopicsLocked = grade != null && visibleTypes.length < ALL_MATH_TYPES.length;
+
+  // If the chosen grade no longer offers the selected topic, clear it.
+  useEffect(() => {
+    if (grade && mathType && !isTopicAvailable(mathType, grade)) {
+      setMathType(null);
+    }
+  }, [grade, mathType]);
 
   const allSelected = grade && mathType && difficulty;
   const message = encouragingMessages[Math.floor(Math.random() * encouragingMessages.length)];
@@ -58,12 +65,17 @@ const SetupScreen = ({ username, onStart }: Props) => {
         {/* Math Type */}
         <Section title="What do you want to practice? 🧮">
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-            {mathTypes.map((mt) => (
+            {visibleTypes.map((mt) => (
               <OptionButton key={mt} selected={mathType === mt} onClick={() => setMathType(mt)} wide>
                 {mathTypeLabels[mt].emoji} {mathTypeLabels[mt].label}
               </OptionButton>
             ))}
           </div>
+          {someTopicsLocked && (
+            <p className="text-sm text-muted-foreground font-body mt-2 text-center">
+              🔓 More topics unlock in higher grades!
+            </p>
+          )}
         </Section>
 
         {/* Difficulty */}

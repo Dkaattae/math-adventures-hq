@@ -13,13 +13,6 @@ Completed work moves to the **Done** section at the bottom.
 
 ### Mid term — product features
 
-- **Grade-appropriate type gating in the UI** — `SetupScreen` currently
-  offers every type to every grade; algebra/order-of-operations for
-  Kindergarten is questionable. Either hide types below a minimum grade or
-  map them to gentler variants.
-- **Leaderboard filters in the UI** — the API already supports
-  `mathType` / `difficulty` / `grade` query params, but the home screen
-  shows one global top-5, which mixes K-easy scores with G5-hard scores.
 - **Full adaptive difficulty** — the end-of-quiz recommendation (see Done)
   reacts to a single score. A fuller version would track rolling accuracy
   per user/topic (the data already lands in `quiz_results.results_json`)
@@ -108,14 +101,26 @@ here.
 
 | Phase | Items | Why first |
 |---|---|---|
-| 1 — content & fairness | Grade gating in setup; leaderboard filters in UI | Directly visible to kids; makes the leaderboard meaningful |
-| 2 — depth | Full adaptive difficulty; progress history; PIN accounts; visual geometry | Builds on data and infrastructure from phase 1 |
+| 1 — depth | Full adaptive difficulty; progress history; PIN accounts; visual geometry | Builds on the data and infrastructure already in place |
 
 ---
 
 ## Done
 
 Completed items, newest first.
+
+### 2026-07-14 — grade gating + leaderboard filters
+
+- **Grade-appropriate topic gating.** A per-topic minimum grade
+  (`_MIN_GRADE_FOR_TYPE` in the backend, `minGradeForType` in
+  `quizConfig.ts`, kept in sync) drives two things: the setup screen only
+  shows topics unlocked at the chosen grade (with a "more topics unlock"
+  hint, and it clears a now-invalid selection when the grade drops), and
+  the `mixed` sampler draws only from grade-appropriate topics.
+- **Leaderboard filters in the UI.** The home-screen leaderboard gained
+  Grade / Topic / Level dropdowns wired to the existing
+  `mathType`/`difficulty`/`grade` query params, plus a friendly empty
+  state when nothing matches.
 
 ### 2026-07-14 — multiple choice, mixed topic, adaptive nudge
 

@@ -53,6 +53,45 @@ export const answerModeConfig: Record<AnswerMode, { label: string; emoji: string
   multiple_choice: { label: "Multiple choice", emoji: "🔘" },
 };
 
+// ---------- grade-appropriate topic gating ----------
+// Lowest grade each topic is offered at. Keep in sync with
+// _MIN_GRADE_FOR_TYPE in backend/app/questions.py.
+
+const GRADE_RANK: Record<Grade, number> = { K: 0, "1": 1, "2": 2, "3": 3, "4": 4, "5": 5 };
+
+export const ALL_MATH_TYPES: MathType[] = [
+  "addition", "subtraction", "multiplication", "division",
+  "algebra", "geometry", "fractions", "order_of_operations",
+  "word_problems", "comparison", "money_time", "decimals",
+  "percentages", "measurement", "mixed",
+];
+
+export const minGradeForType: Record<MathType, Grade> = {
+  addition: "K",
+  subtraction: "K",
+  comparison: "K",
+  geometry: "K",
+  word_problems: "K",
+  mixed: "K",
+  money_time: "1",
+  fractions: "2",
+  multiplication: "2",
+  measurement: "2",
+  algebra: "2",
+  division: "3",
+  order_of_operations: "3",
+  decimals: "3",
+  percentages: "4",
+};
+
+export function isTopicAvailable(type: MathType, grade: Grade): boolean {
+  return GRADE_RANK[grade] >= GRADE_RANK[minGradeForType[type]];
+}
+
+export function topicsForGrade(grade: Grade): MathType[] {
+  return ALL_MATH_TYPES.filter((t) => isTopicAvailable(t, grade));
+}
+
 // ---------- adaptive level recommendation ----------
 
 const GRADE_ORDER: Grade[] = ["K", "1", "2", "3", "4", "5"];

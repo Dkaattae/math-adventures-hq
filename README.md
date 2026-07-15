@@ -19,6 +19,11 @@ leaderboard.
   difficulty (easy/medium/hard) — e.g. division introduces remainders at
   grade 3 medium and fractions/decimals at grade 5 hard; word problems
   add division stories at grade 3 hard.
+- **Grade-appropriate topics**: the setup screen only offers topics that
+  fit the chosen grade (no long division for Kindergarteners), and the
+  🎲 Mixed quiz samples only from unlocked topics.
+- **Filterable leaderboard**: narrow the leaderboard by grade, topic, and
+  difficulty so a K-easy run isn't ranked against a Grade-5-hard one.
 - **Adaptive "what's next" nudge**: at the end of a quiz the app reacts
   to the score with an encouraging suggestion — level up when a kid aces
   it, ease down when they struggle — with a one-tap button to start the
