@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { Question } from "@/lib/api";
+import ShapeFigure from "./ShapeFigure";
 
 interface Props {
   questions: Question[];
@@ -169,6 +170,11 @@ const QuizScreen = ({ questions, onFinish }: Props) => {
             <div className={`p-8 rounded-3xl border-2 text-center transition-colors ${
               feedback === "saved" ? "bg-success/10 border-success" : "bg-card border-border"
             }`}>
+              {questions[current].figure && (
+                <div className="mb-4">
+                  <ShapeFigure shape={questions[current].figure!} />
+                </div>
+              )}
               <p className="text-2xl md:text-3xl font-heading font-bold">
                 {questions[current].question}
               </p>

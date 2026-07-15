@@ -43,16 +43,17 @@ paths:
   /api/users:
     post:
       tags: [users]
-      summary: Create (or claim) a username for this player
+      summary: Create a username + 4-digit PIN for this player
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [username]
+              required: [username, pin]
               properties:
                 username: { type: string, minLength: 1, maxLength: 20 }
+                pin: { type: string, pattern: "^[0-9]{4}$", description: "4-digit numeric PIN" }
       responses:
         "201":
           description: User created
@@ -62,6 +63,32 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "409":
           description: Username already taken
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /api/users/login:
+    post:
+      tags: [users]
+      summary: Log a returning player in with their username + PIN
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, pin]
+              properties:
+                username: { type: string, minLength: 1, maxLength: 20 }
+                pin: { type: string, pattern: "^[0-9]{4}$" }
+      responses:
+        "200":
+          description: Logged in
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "401":
+          description: Wrong username / PIN
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -250,6 +277,11 @@ components:
           description: Answer choices for multiple-choice quizzes; absent/null for typed quizzes.
           items: { type: string }
           example: ["10", "11", "12", "13"]
+        figure:
+          type: string
+          nullable: true
+          description: Shape name to draw for a visual geometry question (e.g. "pentagon"); null otherwise.
+          example: "pentagon"
 
     QuestionResult:
       allOf:

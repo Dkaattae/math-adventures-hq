@@ -68,6 +68,9 @@ class UserRow(Base):
     __tablename__ = "users"
     username: Mapped[str] = mapped_column(String(20), primary_key=True)
     username_lower: Mapped[str] = mapped_column(String(20), unique=True, index=True)
+    # PBKDF2 "salt$hash" of the player's 4-digit PIN. Nullable for rows
+    # created before PINs existed (those simply can't log back in).
+    pin_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=_utcnow)
 
 

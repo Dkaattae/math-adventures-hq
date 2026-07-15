@@ -7,7 +7,7 @@ from app import storage
 def _run_quiz(
     client, db_session, username, math_type="geometry", time_used=60, correct=True
 ):
-    client.post("/api/users", json={"username": username})
+    client.post("/api/users", json={"username": username, "pin": "1234"})
     quiz = client.post(
         "/api/quizzes",
         json={

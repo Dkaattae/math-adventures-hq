@@ -3,10 +3,11 @@ import UsernameScreen from "@/components/UsernameScreen";
 import SetupScreen from "@/components/SetupScreen";
 import QuizScreen from "@/components/QuizScreen";
 import ResultsScreen from "@/components/ResultsScreen";
+import ProgressScreen from "@/components/ProgressScreen";
 import type { MathType, Difficulty, Grade, AnswerMode } from "@/data/quizConfig";
 import { createQuiz, submitQuiz, type Question, type QuizResult } from "@/lib/api";
 
-type Screen = "username" | "setup" | "quiz" | "results" | "error";
+type Screen = "username" | "setup" | "quiz" | "results" | "progress" | "error";
 
 const Index = () => {
   const [screen, setScreen] = useState<Screen>("username");
@@ -62,7 +63,16 @@ const Index = () => {
   return (
     <>
       {screen === "username" && <UsernameScreen onSubmit={handleUsername} />}
-      {screen === "setup" && <SetupScreen username={username} onStart={startQuiz} />}
+      {screen === "setup" && (
+        <SetupScreen
+          username={username}
+          onStart={startQuiz}
+          onShowProgress={() => setScreen("progress")}
+        />
+      )}
+      {screen === "progress" && (
+        <ProgressScreen username={username} onBack={() => setScreen("setup")} />
+      )}
       {screen === "quiz" && <QuizScreen questions={questions} onFinish={handleFinish} />}
       {screen === "results" && quizResult && (
         <ResultsScreen

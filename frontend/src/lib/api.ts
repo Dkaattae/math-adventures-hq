@@ -18,6 +18,8 @@ export interface Question {
   question: string;
   // Present only for multiple-choice quizzes.
   options?: string[] | null;
+  // Present for visual geometry: a shape name to draw (e.g. "pentagon").
+  figure?: string | null;
 }
 
 export interface QuestionResult {
@@ -27,6 +29,7 @@ export interface QuestionResult {
   explanation: string;
   userAnswer: string | null;
   isCorrect: boolean;
+  figure?: string | null;
 }
 
 export interface Quiz {
@@ -87,16 +90,65 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await res.json()) as T;
 }
 
-export function createUser(username: string) {
+export function createUser(username: string, pin: string) {
   return request<{ username: string; createdAt: string }>("/api/users", {
     method: "POST",
-    body: JSON.stringify({ username }),
+    body: JSON.stringify({ username, pin }),
+  });
+}
+
+export function login(username: string, pin: string) {
+  return request<{ username: string; createdAt: string }>("/api/users/login", {
+    method: "POST",
+    body: JSON.stringify({ username, pin }),
   });
 }
 
 export function checkUsername(username: string) {
   const qs = new URLSearchParams({ username });
   return request<{ username: string; available: boolean }>(`/api/users/check?${qs}`);
+}
+
+export interface TopicStat {
+  mathType: MathType;
+  quizzes: number;
+  averageScore: number;
+  bestScore: number;
+}
+
+export interface RecentQuiz {
+  mathType: MathType | null;
+  grade: Grade | null;
+  difficulty: Difficulty | null;
+  score: number;
+  total: number;
+  time: string;
+  achievedAt: string;
+}
+
+export interface UserStats {
+  username: string;
+  totalQuizzes: number;
+  averageScore: number;
+  bestScore: number;
+  byTopic: TopicStat[];
+  recent: RecentQuiz[];
+}
+
+export interface SuggestedLevel {
+  grade: Grade;
+  difficulty: Difficulty;
+  basedOn: number;
+}
+
+export function getUserStats(username: string) {
+  return request<UserStats>(`/api/users/${encodeURIComponent(username)}/stats`);
+}
+
+export function getSuggestedLevel(username: string) {
+  return request<SuggestedLevel | null>(
+    `/api/users/${encodeURIComponent(username)}/suggested-level`,
+  );
 }
 
 export function createQuiz(payload: {

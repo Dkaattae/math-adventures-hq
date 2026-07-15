@@ -1,6 +1,6 @@
 # Math Adventures HQ — Project Plan
 
-_Last updated: 2026-07-14_
+_Last updated: 2026-07-15_
 
 This document collects the roadmap for expanding the quiz, the known bugs
 and rough edges found while auditing the codebase, the testing gaps, and
@@ -11,31 +11,49 @@ Completed work moves to the **Done** section at the bottom.
 
 ## 1. Expanding the quiz
 
-### Mid term — product features
-
-- **Full adaptive difficulty** — the end-of-quiz recommendation (see Done)
-  reacts to a single score. A fuller version would track rolling accuracy
-  per user/topic (the data already lands in `quiz_results.results_json`)
-  and auto-select the starting tier next time.
-
 ### Long term
 
-- Visual geometry: the geometry pool is text-only; rendering SVG shapes
-  ("how many sides does *this* shape have?") would unlock much better
-  questions.
 - Printable worksheet export (the generators already produce clean
   question/answer pairs).
-- Lightweight accounts (e.g. a 4-digit PIN) so returning players keep an
-  identity, plus a parent-facing progress view.
 - Practice mode (untimed) vs. challenge mode (streaks; the `badge` field
   already exists end to end).
+- More visual questions: extend the SVG figures beyond shape ID to
+  angles, symmetry, and simple area/perimeter diagrams.
 
 ---
 
 ## 2. Known bugs & issues
 
-All items from the original audit are fixed — see Done. New findings go
-here.
+New findings from the 2026-07-15 audit (after the depth-features work).
+Ordered by impact.
+
+1. **No PIN recovery + no login rate-limiting.** A kid who forgets their
+   4-digit PIN is locked out of that name permanently, and `POST
+   /api/users/login` has no throttle, so a 4-digit PIN (10k combos) is
+   brute-forceable. Given the audience the stakes are low, but a
+   "forgot PIN?" path (even a soft reset) and basic rate-limiting are
+   worth it. Usernames are also still an open, unauthenticated namespace.
+2. **Schema changes need Alembic — `pin_hash` won't appear on an existing
+   Postgres DB.** `init_engine` uses `Base.metadata.create_all`, which
+   only creates missing *tables*, never adds *columns*. The new
+   `users.pin_hash` column will be present on any fresh database (dev
+   sqlite, CI, a new deploy) but a pre-existing Postgres volume would
+   need a manual migration or it errors on user creation/login. This
+   makes the long-standing "adopt Alembic" item now load-bearing.
+3. **`suggest_level` ignores the topic.** The history-based level
+   suggestion looks at the most recent quiz's level regardless of
+   subject, so a kid who's strong at addition but new to fractions gets
+   the same suggested level for both. It should be per-topic.
+4. **`recommendNext` (results screen) and `suggest_level` (setup screen)
+   can disagree.** They implement the same up/down ladder in two places
+   (TS and Python) from different inputs (last score vs. recent average),
+   so the "try Grade 4!" nudge after a quiz may not match the level
+   pre-filled on the next visit. Unify the rule (ideally one
+   server-side source of truth) to avoid a confusing mismatch.
+5. **Stats/suggested-level endpoints are unauthenticated.** Anyone can
+   read any player's progress by guessing a username. Low severity for
+   this app, but if PINs are meant to "own" a name, stats arguably
+   should sit behind login too.
 
 ---
 
@@ -61,9 +79,10 @@ here.
 
 ### Frontend
 
-- **More component tests** — QuizScreen timers and UsernameScreen are
-  covered now; still missing: flag/review panel navigation, ResultsScreen
-  rendering from a `QuizResult` fixture, SetupScreen selection flow.
+- **More component tests** — QuizScreen timers/MC, UsernameScreen PIN
+  flow, Leaderboard filters, ProgressScreen, and ShapeFigure are covered
+  now; still missing: flag/review panel navigation and the ResultsScreen
+  recommendation/figure rendering from a `QuizResult` fixture.
 - **Flow-level test with a mocked API** (MSW): username → setup → quiz →
   results against canned responses.
 - **Automated Playwright smoke test** — the full flow has been verified
@@ -78,22 +97,29 @@ here.
 ## 4. Code quality & architecture improvements
 
 - **Generate frontend API types from `openapi.yaml`** (e.g.
-  `openapi-typescript`). The contract currently lives in three
-  hand-maintained copies — `openapi.yaml`, `models.py`, and
-  `frontend/src/lib/api.ts` — which is exactly how the frontend drifted
-  onto mock data unnoticed.
-- **Split `questions.py`** (~1300 lines and growing) into a package:
+  `openapi-typescript`). The contract now lives in three hand-maintained
+  copies — `openapi.yaml`, `models.py`, and `frontend/src/lib/api.ts` —
+  and each new field (options, figure, pin, stats) has to be added to all
+  three by hand; this is exactly how the frontend once drifted onto mock
+  data unnoticed.
+- **Unify the level-recommendation logic.** `recommendNext` (TS) and
+  `suggest_level` (Python) encode the same grade/difficulty ladder twice
+  — collapse to one server-side rule the results screen also consumes
+  (see bug #4).
+- **`leaderboard` table is doing double duty** as both the ranking board
+  and each user's quiz history (via `query_user_stats`). Consider a
+  dedicated history/attempts table, or rename to reflect that it's an
+  attempts log the leaderboard reads from.
+- **Split `questions.py`** (~1400 lines and growing) into a package:
   `questions/arithmetic.py`, `fractions.py`, `order_of_ops.py`,
-  `word_problems.py`, `geometry_data.py`, etc., behind the same
-  `generate_questions` facade.
+  `word_problems.py`, `geometry_data.py`, `distractors.py`, etc., behind
+  the same `generate_questions` facade.
 - **Tune difficulty scaling per topic.** `_difficulty_range` is linear in
   grade for every type; multiplication should probably cap factors near
   12 (times tables) regardless of range, and fractions difficulty is
   better driven by denominator size than by the shared range.
-- **Alembic migrations** instead of `create_all()` — schema changes
-  currently require wiping the database.
-- **Harden user creation** — it's an open unauthenticated endpoint;
-  rate-limit it and restrict usernames to a sane character set.
+- **Alembic migrations** instead of `create_all()` — now load-bearing
+  because of the new `users.pin_hash` column (see bug #2).
 
 ---
 
@@ -101,13 +127,33 @@ here.
 
 | Phase | Items | Why first |
 |---|---|---|
-| 1 — depth | Full adaptive difficulty; progress history; PIN accounts; visual geometry | Builds on the data and infrastructure already in place |
+| 1 — hardening | Alembic migrations (§2.2); unify level logic (§2.4); PIN recovery + login rate-limit (§2.1) | The depth features added surface area that now needs shoring up |
+| 2 — polish | Per-topic level suggestion (§2.3); worksheet export; practice vs. challenge mode; more visual questions | Additive product depth on a solid base |
 
 ---
 
 ## Done
 
 Completed items, newest first.
+
+### 2026-07-15 — depth features
+
+- **PIN accounts.** New players set a 4-digit PIN (PBKDF2-hashed,
+  stdlib-only) and returning players enter it to reclaim their name;
+  `POST /api/users/login` verifies it. The username screen detects
+  new-vs-returning and shows the matching PIN field.
+- **Progress view.** `GET /api/users/{name}/stats` aggregates a player's
+  attempts (totals, per-topic averages/bests, recent quizzes) from the
+  leaderboard rows; a "📊 My Progress" screen renders it.
+- **History-based adaptive difficulty.** `GET
+  /api/users/{name}/suggested-level` nudges the last-played level up/down
+  by recent average score, and the setup screen pre-selects it for
+  returning players ("we picked up where you left off").
+- **Visual geometry.** Questions can carry a `figure` (shape name); the
+  client draws it as an inline SVG (`ShapeFigure`) — computed regular
+  polygons plus circle/rectangle. Visual shape-ID questions join the
+  EASY geometry tier and appear in geometry and mixed quizzes.
+- (Known follow-ups from auditing this work are logged in §2.)
 
 ### 2026-07-14 — grade gating + leaderboard filters
 
