@@ -43,6 +43,38 @@ _MIXED_TYPES: list[MathType] = [
     MathType.measurement,
 ]
 
+# Lowest grade at which each topic is offered (K == 0). Roughly aligned to
+# when the concept is introduced in a typical K-5 curriculum. `mixed` is
+# always available and draws only from topics unlocked at the chosen grade.
+# Keep this in sync with `minGradeForType` in frontend/src/data/quizConfig.ts.
+_MIN_GRADE_FOR_TYPE: dict[MathType, int] = {
+    MathType.addition: 0,
+    MathType.subtraction: 0,
+    MathType.comparison: 0,
+    MathType.geometry: 0,
+    MathType.word_problems: 0,
+    MathType.money_time: 1,
+    MathType.fractions: 2,
+    MathType.multiplication: 2,
+    MathType.measurement: 2,
+    MathType.algebra: 2,
+    MathType.division: 3,
+    MathType.order_of_operations: 3,
+    MathType.decimals: 3,
+    MathType.percentages: 4,
+    MathType.mixed: 0,
+}
+
+
+def _grade_index(grade: Grade) -> int:
+    return 0 if grade == Grade.K else int(grade.value)
+
+
+def types_available(grade: Grade) -> list[MathType]:
+    """Topics offered at this grade (includes `mixed`), in enum order."""
+    g = _grade_index(grade)
+    return [t for t in MathType if _MIN_GRADE_FOR_TYPE[t] <= g]
+
 
 def _difficulty_range(difficulty: Difficulty, grade: Grade) -> tuple[int, int]:
     g = 0 if grade == Grade.K else int(grade.value)
@@ -1294,12 +1326,15 @@ def _generate_mixed(difficulty: Difficulty, grade: Grade, rng: random.Random):
     (geometry items live outside the signature system).
     """
     lo, hi = _difficulty_range(difficulty, grade)
+    # Only mix in topics that are grade-appropriate (a Kindergartener's
+    # "mixed" quiz shouldn't surprise them with long division).
+    pool_types = [t for t in types_available(grade) if t != MathType.mixed]
     questions: list[QuestionInternal] = []
     seen_sig: set[tuple] = set()
     seen_text: set[str] = set()
     for i in range(10):
         for _ in range(_MAX_ATTEMPTS):
-            math_type = rng.choice(_MIXED_TYPES)
+            math_type = rng.choice(pool_types)
             if math_type == MathType.geometry:
                 text, answer, explanation = rng.choice(_geometry_pool(difficulty, grade))
                 signature = ("geo", text)
