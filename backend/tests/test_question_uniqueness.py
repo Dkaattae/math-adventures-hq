@@ -45,9 +45,11 @@ def test_all_10_questions_are_unique(math_type, difficulty, grade):
     for seed in range(50):
         rng = random.Random(seed)
         qs = generate_questions(math_type, difficulty, grade, rng=rng)
-        texts = [q.question for q in qs]
-        assert len(set(texts)) == 10, (
-            f"duplicate question for {math_type}/{difficulty}/{grade} seed={seed}: {texts}"
+        # Visual geometry questions share wording but differ by figure, so
+        # the uniqueness key includes the figure.
+        keys = [(q.question, q.figure) for q in qs]
+        assert len(set(keys)) == 10, (
+            f"duplicate question for {math_type}/{difficulty}/{grade} seed={seed}: {keys}"
         )
 
 
@@ -58,7 +60,24 @@ def test_geometry_returns_10_unique_questions_for_all_levels():
                 rng = random.Random(seed)
                 qs = generate_questions(MathType.geometry, difficulty, grade, rng=rng)
                 assert len(qs) == 10
-                assert len({q.question for q in qs}) == 10
+                # Visual questions deliberately share wording ("How many
+                # sides does this shape have?"), so uniqueness is by the
+                # (question, figure) pair rather than text alone.
+                assert len({(q.question, q.figure) for q in qs}) == 10
+
+
+def test_visual_geometry_questions_carry_a_figure():
+    from app.questions import _GEOMETRY_VISUAL
+
+    saw_figure = False
+    for seed in range(30):
+        rng = random.Random(seed)
+        qs = generate_questions(MathType.geometry, Difficulty.easy, Grade.K, rng=rng)
+        for q in qs:
+            if q.figure is not None:
+                saw_figure = True
+                assert q.figure in {f[3] for f in _GEOMETRY_VISUAL}
+    assert saw_figure, "K/easy geometry never included a visual shape question"
 
 
 def test_geometry_pool_has_at_least_100_total_questions():
@@ -236,9 +255,15 @@ def test_fraction_and_decimal_answer_grading():
 
 
 def test_geometry_tier_selector_by_grade_and_difficulty():
-    from app.questions import _GEOMETRY_EASY, _GEOMETRY_HARD, _GEOMETRY_MEDIUM, _geometry_pool
+    from app.questions import (
+        _GEOMETRY_EASY,
+        _GEOMETRY_HARD,
+        _GEOMETRY_VISUAL,
+        _geometry_pool,
+    )
 
-    easy_set = {q[0] for q in _GEOMETRY_EASY}
+    # EASY tier is the curated easy items plus the visual shape questions.
+    easy_set = {q[0] for q in _GEOMETRY_EASY} | {q[0] for q in _GEOMETRY_VISUAL}
     hard_set = {q[0] for q in _GEOMETRY_HARD}
 
     # K easy → EASY only (no HARD)

@@ -2,11 +2,13 @@
 previous in-memory store, but now talks to SQLAlchemy."""
 from __future__ import annotations
 
+import hashlib
+import secrets
 from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from .db_models import LeaderboardRow, QuizResultRow, QuizRow, UserRow
@@ -18,7 +20,11 @@ from .models import (
     QuestionInternal,
     QuestionResult,
     QuizResult,
+    RecentQuiz,
+    SuggestedLevel,
+    TopicStat,
     User,
+    UserStats,
 )
 
 __all__ = [
@@ -49,6 +55,7 @@ def _question_to_json(q: QuestionInternal) -> dict:
         "correctAnswer": q.correctAnswer,
         "explanation": q.explanation,
         "options": q.options,
+        "figure": q.figure,
     }
 
 
@@ -62,19 +69,45 @@ def _result_item_to_json(r: QuestionResult) -> dict:
 
 # ---------- users ----------
 
+def hash_pin(pin: str, salt: str | None = None) -> str:
+    """PBKDF2 hash as 'salt$hexhash'. Stdlib only — no new dependency."""
+    salt = salt or secrets.token_hex(16)
+    digest = hashlib.pbkdf2_hmac("sha256", pin.encode(), bytes.fromhex(salt), 100_000).hex()
+    return f"{salt}${digest}"
+
+
+def verify_pin(pin: str, stored: str | None) -> bool:
+    if not stored or "$" not in stored:
+        return False
+    salt, _ = stored.split("$", 1)
+    return secrets.compare_digest(hash_pin(pin, salt), stored)
+
+
 def user_exists(db: Session, username: str) -> bool:
     return db.scalar(select(UserRow).where(UserRow.username_lower == username.lower())) is not None
 
 
-def create_user(db: Session, username: str) -> User:
+def get_user_row(db: Session, username: str) -> Optional[UserRow]:
+    return db.scalar(select(UserRow).where(UserRow.username_lower == username.lower()))
+
+
+def create_user(db: Session, username: str, pin: str | None = None) -> User:
     row = UserRow(
         username=username,
         username_lower=username.lower(),
+        pin_hash=hash_pin(pin) if pin else None,
         created_at=datetime.now(timezone.utc),
     )
     db.add(row)
     db.commit()
     db.refresh(row)
+    return User(username=row.username, createdAt=row.created_at)
+
+
+def check_login(db: Session, username: str, pin: str) -> Optional[User]:
+    row = get_user_row(db, username)
+    if row is None or not verify_pin(pin, row.pin_hash):
+        return None
     return User(username=row.username, createdAt=row.created_at)
 
 
@@ -185,6 +218,105 @@ def query_leaderboard(
         )
         for r in rows
     ]
+
+
+# ---------- per-user progress ----------
+
+def _user_entries(db: Session, username: str) -> list[LeaderboardRow]:
+    """All of a player's submitted quizzes, newest first."""
+    stmt = (
+        select(LeaderboardRow)
+        .where(func.lower(LeaderboardRow.name) == username.lower())
+        .order_by(LeaderboardRow.achieved_at.desc())
+    )
+    return list(db.scalars(stmt).all())
+
+
+def query_user_stats(db: Session, username: str) -> UserStats:
+    rows = _user_entries(db, username)
+    if not rows:
+        return UserStats(
+            username=username, totalQuizzes=0, averageScore=0.0,
+            bestScore=0, byTopic=[], recent=[],
+        )
+
+    scores = [r.score for r in rows]
+    by_topic: dict[str, list[int]] = {}
+    for r in rows:
+        if r.math_type:
+            by_topic.setdefault(r.math_type, []).append(r.score)
+
+    topic_stats = [
+        TopicStat(
+            mathType=MathType(mt),
+            quizzes=len(s),
+            averageScore=round(sum(s) / len(s), 1),
+            bestScore=max(s),
+        )
+        for mt, s in sorted(by_topic.items(), key=lambda kv: (-len(kv[1]), kv[0]))
+    ]
+
+    recent = [
+        RecentQuiz(
+            mathType=MathType(r.math_type) if r.math_type else None,
+            grade=Grade(r.grade) if r.grade else None,
+            difficulty=Difficulty(r.difficulty) if r.difficulty else None,
+            score=r.score,
+            total=r.total,
+            time=format_time(r.time_used_seconds),
+            achievedAt=r.achieved_at,
+        )
+        for r in rows[:5]
+    ]
+
+    return UserStats(
+        username=username,
+        totalQuizzes=len(rows),
+        averageScore=round(sum(scores) / len(scores), 1),
+        bestScore=max(scores),
+        byTopic=topic_stats,
+        recent=recent,
+    )
+
+
+_GRADE_LADDER = [Grade.K, Grade.G1, Grade.G2, Grade.G3, Grade.G4, Grade.G5]
+_DIFF_LADDER = [Difficulty.easy, Difficulty.medium, Difficulty.hard]
+
+
+def suggest_level(db: Session, username: str) -> Optional[SuggestedLevel]:
+    """Recommend a starting level from recent history.
+
+    Looks at the player's most recent quizzes at their latest level and
+    nudges up (avg >= 9), down (avg <= 4), or holds — the history-based
+    counterpart to the end-of-quiz recommendation on the results screen.
+    Returns None when there's nothing to go on.
+    """
+    rows = [r for r in _user_entries(db, username) if r.grade and r.difficulty]
+    if not rows:
+        return None
+
+    latest = rows[0]
+    grade, difficulty = Grade(latest.grade), Difficulty(latest.difficulty)
+
+    # Average across the recent runs that share the latest level.
+    same_level = [
+        r for r in rows[:10] if r.grade == latest.grade and r.difficulty == latest.difficulty
+    ]
+    avg = sum(r.score for r in same_level) / len(same_level)
+
+    gi, di = _GRADE_LADDER.index(grade), _DIFF_LADDER.index(difficulty)
+    if avg >= 9:
+        if di < len(_DIFF_LADDER) - 1:
+            difficulty = _DIFF_LADDER[di + 1]
+        elif gi < len(_GRADE_LADDER) - 1:
+            grade, difficulty = _GRADE_LADDER[gi + 1], Difficulty.easy
+    elif avg <= 4:
+        if di > 0:
+            difficulty = _DIFF_LADDER[di - 1]
+        elif gi > 0:
+            grade, difficulty = _GRADE_LADDER[gi - 1], Difficulty.hard
+
+    return SuggestedLevel(grade=grade, difficulty=difficulty, basedOn=len(same_level))
 
 
 def reset(db: Session) -> None:

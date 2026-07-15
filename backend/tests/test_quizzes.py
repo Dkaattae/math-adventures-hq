@@ -4,7 +4,7 @@ from app import storage
 
 
 def _make_user(client, name="Alice"):
-    client.post("/api/users", json={"username": name})
+    client.post("/api/users", json={"username": name, "pin": "1234"})
     return name
 
 

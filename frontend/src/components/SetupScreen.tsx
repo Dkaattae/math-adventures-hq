@@ -1,25 +1,46 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import {
   type MathType, type Difficulty, type Grade, type AnswerMode,
   mathTypeLabels, difficultyConfig, answerModeConfig, encouragingMessages,
   ALL_MATH_TYPES, topicsForGrade, isTopicAvailable,
 } from "@/data/quizConfig";
+import { getSuggestedLevel } from "@/lib/api";
 
 interface Props {
   username: string;
   onStart: (grade: Grade, mathType: MathType, difficulty: Difficulty, answerMode: AnswerMode) => void;
+  onShowProgress: () => void;
 }
 
 const grades: Grade[] = ["K", "1", "2", "3", "4", "5"];
 const difficulties: Difficulty[] = ["easy", "medium", "hard"];
 const answerModes: AnswerMode[] = ["typing", "multiple_choice"];
 
-const SetupScreen = ({ username, onStart }: Props) => {
+const SetupScreen = ({ username, onStart, onShowProgress }: Props) => {
   const [grade, setGrade] = useState<Grade | null>(null);
   const [mathType, setMathType] = useState<MathType | null>(null);
   const [difficulty, setDifficulty] = useState<Difficulty | null>(null);
   const [answerMode, setAnswerMode] = useState<AnswerMode>("typing");
+  const [suggested, setSuggested] = useState(false);
+  const suggestionApplied = useRef(false);
+
+  // History-based adaptive difficulty: pre-select the level the backend
+  // recommends from the player's recent performance (they can still
+  // change it). Only applied once, and never overrides a manual pick.
+  useEffect(() => {
+    let cancelled = false;
+    getSuggestedLevel(username)
+      .then((level) => {
+        if (cancelled || !level || suggestionApplied.current) return;
+        suggestionApplied.current = true;
+        setGrade((g) => g ?? level.grade);
+        setDifficulty((d) => d ?? level.difficulty);
+        setSuggested(true);
+      })
+      .catch(() => { /* suggestion is optional */ });
+    return () => { cancelled = true; };
+  }, [username]);
 
   // Topics are gated by grade; before a grade is chosen we show them all
   // so the kid can browse.
@@ -45,10 +66,17 @@ const SetupScreen = ({ username, onStart }: Props) => {
       <motion.h1
         initial={{ y: -20 }}
         animate={{ y: 0 }}
-        className="text-3xl md:text-4xl font-heading font-bold mb-8"
+        className="text-3xl md:text-4xl font-heading font-bold mb-3"
       >
         Hey {username}! 👋
       </motion.h1>
+
+      <button
+        onClick={onShowProgress}
+        className="mb-6 px-4 py-2 rounded-xl bg-card border-2 border-border font-heading font-semibold text-sm hover:border-primary/40 transition-all"
+      >
+        📊 My Progress
+      </button>
 
       <div className="w-full max-w-lg space-y-8">
         {/* Grade */}
@@ -60,6 +88,11 @@ const SetupScreen = ({ username, onStart }: Props) => {
               </OptionButton>
             ))}
           </div>
+          {suggested && (
+            <p className="text-sm text-muted-foreground font-body mt-2 text-center">
+              ✨ We picked up where you left off — change it if you like!
+            </p>
+          )}
         </Section>
 
         {/* Math Type */}

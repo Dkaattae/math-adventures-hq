@@ -58,6 +58,12 @@ class User(BaseModel):
 
 class UserCreate(BaseModel):
     username: str = Field(min_length=1, max_length=20)
+    pin: str = Field(pattern=r"^\d{4}$", description="4-digit numeric PIN")
+
+
+class UserLogin(BaseModel):
+    username: str = Field(min_length=1, max_length=20)
+    pin: str = Field(pattern=r"^\d{4}$")
 
 
 class UsernameAvailability(BaseModel):
@@ -73,6 +79,9 @@ class Question(BaseModel):
     # Present only for multiple-choice quizzes: the shuffled answer
     # choices (one of which is correct). None means "type your answer".
     options: Optional[list[str]] = None
+    # Present for visual geometry: a shape name the client draws as SVG
+    # (e.g. "pentagon", "circle"). None for non-visual questions.
+    figure: Optional[str] = None
 
 
 class QuestionInternal(Question):
@@ -88,6 +97,7 @@ class QuestionResult(BaseModel):
     explanation: str
     userAnswer: Optional[str]
     isCorrect: bool
+    figure: Optional[str] = None
 
 
 class QuizCreate(BaseModel):
@@ -137,6 +147,41 @@ class LeaderboardEntry(BaseModel):
     difficulty: Optional[Difficulty] = None
     grade: Optional[Grade] = None
     achievedAt: datetime
+
+
+# ---------- progress / stats ----------
+
+class TopicStat(BaseModel):
+    mathType: MathType
+    quizzes: int
+    averageScore: float
+    bestScore: int
+
+
+class RecentQuiz(BaseModel):
+    mathType: Optional[MathType] = None
+    grade: Optional[Grade] = None
+    difficulty: Optional[Difficulty] = None
+    score: int
+    total: int
+    time: str
+    achievedAt: datetime
+
+
+class UserStats(BaseModel):
+    username: str
+    totalQuizzes: int
+    averageScore: float
+    bestScore: int
+    byTopic: list[TopicStat]
+    recent: list[RecentQuiz]
+
+
+class SuggestedLevel(BaseModel):
+    """Next level to start a returning player at, from their history."""
+    grade: Grade
+    difficulty: Difficulty
+    basedOn: int  # how many recent quizzes informed the suggestion
 
 
 # ---------- errors ----------

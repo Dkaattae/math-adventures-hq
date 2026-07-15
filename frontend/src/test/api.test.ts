@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ApiError, checkUsername, createQuiz, createUser, getLeaderboard, submitQuiz } from "@/lib/api";
+import { ApiError, checkUsername, createQuiz, createUser, getLeaderboard, login, submitQuiz } from "@/lib/api";
 
 function jsonResponse(body: unknown, status = 200) {
   return {
@@ -15,17 +15,29 @@ describe("api client", () => {
     vi.unstubAllGlobals();
   });
 
-  it("createUser posts to /api/users and returns the created user", async () => {
+  it("createUser posts username + pin and returns the created user", async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ username: "Emma", createdAt: "2026-01-01T00:00:00Z" }, 201));
     vi.stubGlobal("fetch", fetchMock);
 
-    const user = await createUser("Emma");
+    const user = await createUser("Emma", "1234");
 
     expect(fetchMock).toHaveBeenCalledWith("/api/users", expect.objectContaining({
       method: "POST",
-      body: JSON.stringify({ username: "Emma" }),
+      body: JSON.stringify({ username: "Emma", pin: "1234" }),
     }));
     expect(user.username).toBe("Emma");
+  });
+
+  it("login posts username + pin to /api/users/login", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ username: "Emma", createdAt: "2026-01-01T00:00:00Z" }, 200));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await login("Emma", "4321");
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/users/login", expect.objectContaining({
+      method: "POST",
+      body: JSON.stringify({ username: "Emma", pin: "4321" }),
+    }));
   });
 
   it("throws an ApiError with the backend's code/message on a 409", async () => {
@@ -34,7 +46,7 @@ describe("api client", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(createUser("Emma")).rejects.toMatchObject({
+    await expect(createUser("Emma", "1234")).rejects.toMatchObject({
       status: 409,
       code: "username_taken",
     } satisfies Partial<ApiError>);

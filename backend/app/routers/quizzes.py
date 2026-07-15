@@ -37,7 +37,10 @@ def _badge_for(score: int) -> str | None:
 
 
 def _public_questions(internal_qs) -> list[Question]:
-    return [Question(id=q.id, question=q.question, options=q.options) for q in internal_qs]
+    return [
+        Question(id=q.id, question=q.question, options=q.options, figure=q.figure)
+        for q in internal_qs
+    ]
 
 
 @router.post("", response_model=Quiz, status_code=201)
@@ -120,6 +123,7 @@ def submit_quiz(
                 explanation=q.explanation,
                 userAnswer=user_ans,
                 isCorrect=is_correct,
+                figure=q.figure,
             )
         )
 

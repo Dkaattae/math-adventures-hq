@@ -24,10 +24,10 @@ leaderboard.
   🎲 Mixed quiz samples only from unlocked topics.
 - **Filterable leaderboard**: narrow the leaderboard by grade, topic, and
   difficulty so a K-easy run isn't ranked against a Grade-5-hard one.
-- **Adaptive "what's next" nudge**: at the end of a quiz the app reacts
-  to the score with an encouraging suggestion — level up when a kid aces
-  it, ease down when they struggle — with a one-tap button to start the
-  recommended level.
+- **Adaptive difficulty**: at the end of a quiz the app suggests a next
+  level (up when a kid aces it, down when they struggle) with a one-tap
+  button, and returning players' setup screen pre-selects a level from
+  their recent history.
 - **Timed quizzes**: 15 seconds per question, 3 minutes total, with
   flagging and a review panel for skipping around.
 - **Forgiving answer grading**: numeric answers are compared as numbers
@@ -37,10 +37,14 @@ leaderboard.
   which option is right) until the quiz is submitted; grading happens
   server-side, and reported quiz time is clamped to the server-observed
   window.
-- **Returning players**: type the same name again and keep playing — a
-  live hint greets returning players as they type. No accounts needed.
-- **Leaderboard**: score + time ranking with per-topic/difficulty/grade
-  filters in the API.
+- **PIN accounts**: new players pick a 4-digit PIN (PBKDF2-hashed) and
+  returning players enter it to reclaim their name and scores.
+- **Progress view**: a "My Progress" screen shows totals, per-topic
+  averages and bests, and recent quizzes.
+- **Visual geometry**: shape-identification questions render the shape as
+  an inline SVG ("how many sides does *this* shape have?").
+- **Leaderboard**: score + time ranking with Grade / Topic / Level
+  filters right on the home screen.
 - **Kid-friendly explanations**: every question carries a short "here's
   how" hint with the graded results.
 

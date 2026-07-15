@@ -1,9 +1,19 @@
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from .. import storage
 from ..db import get_session
-from ..models import ErrorResponse, User, UserCreate, UsernameAvailability
+from ..models import (
+    ErrorResponse,
+    SuggestedLevel,
+    User,
+    UserCreate,
+    UserLogin,
+    UsernameAvailability,
+    UserStats,
+)
 
 router = APIRouter(prefix="/api/users", tags=["users"])
 
@@ -28,4 +38,30 @@ def create_user(payload: UserCreate, db: Session = Depends(get_session)) -> User
                 message=f"Username '{payload.username}' is already taken.",
             ).model_dump(),
         )
-    return storage.create_user(db, payload.username)
+    return storage.create_user(db, payload.username, payload.pin)
+
+
+@router.post("/login", response_model=User)
+def login(payload: UserLogin, db: Session = Depends(get_session)) -> User:
+    user = storage.check_login(db, payload.username, payload.pin)
+    if user is None:
+        raise HTTPException(
+            status_code=401,
+            detail=ErrorResponse(
+                code="invalid_login",
+                message="That name and PIN don't match. Try again!",
+            ).model_dump(),
+        )
+    return user
+
+
+@router.get("/{username}/stats", response_model=UserStats)
+def user_stats(username: str, db: Session = Depends(get_session)) -> UserStats:
+    # No auth gate: stats are derived from the public leaderboard, and a
+    # player with no history simply gets zeros.
+    return storage.query_user_stats(db, username)
+
+
+@router.get("/{username}/suggested-level", response_model=Optional[SuggestedLevel])
+def suggested_level(username: str, db: Session = Depends(get_session)) -> Optional[SuggestedLevel]:
+    return storage.suggest_level(db, username)

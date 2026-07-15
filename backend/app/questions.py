@@ -1157,6 +1157,30 @@ _GEOMETRY_HARD: list[GeometryItem] = [
     ("Each angle of an equilateral triangle measures how many degrees?", 60, "180 ÷ 3 = 60° each! 🔺"),
 ]
 
+# Visual questions: the client draws the `figure` shape as SVG. Each entry
+# is (question, answer, explanation, figure). Question text intentionally
+# does NOT name the shape (the picture is the point), so several share
+# wording — dedup within a quiz is by (text, figure), which stays unique.
+VisualGeometryItem = tuple[str, int | str, str, str]
+
+_GEOMETRY_VISUAL: list[VisualGeometryItem] = [
+    ("How many sides does this shape have?", 3, "A triangle has 3 sides! 📐", "triangle"),
+    ("How many sides does this shape have?", 4, "A square has 4 sides! ⬜", "square"),
+    ("How many sides does this shape have?", 5, "A pentagon has 5 sides! ⭐", "pentagon"),
+    ("How many sides does this shape have?", 6, "A hexagon has 6 sides! 🔷", "hexagon"),
+    ("How many sides does this shape have?", 8, "An octagon has 8 sides! 🐙", "octagon"),
+    ("How many sides does this shape have?", 0, "A circle has no straight sides! ⭕", "circle"),
+    ("How many corners does this shape have?", 3, "3 sides → 3 corners! 📐", "triangle"),
+    ("How many corners does this shape have?", 5, "5 sides → 5 corners! ⭐", "pentagon"),
+    ("How many corners does this shape have?", 6, "6 sides → 6 corners! 🔷", "hexagon"),
+    ("How many corners does this shape have?", 8, "8 sides → 8 corners! 🐙", "octagon"),
+    ("What is the name of this shape?", "triangle", "3 sides makes a triangle! 📐", "triangle"),
+    ("What is the name of this shape?", "square", "4 equal sides makes a square! ⬜", "square"),
+    ("What is the name of this shape?", "pentagon", "5 sides makes a pentagon! ⭐", "pentagon"),
+    ("What is the name of this shape?", "hexagon", "6 sides makes a hexagon! 🔷", "hexagon"),
+    ("What is the name of this shape?", "circle", "A round shape is a circle! ⭕", "circle"),
+]
+
 
 def _geometry_pool(difficulty: Difficulty, grade: Grade) -> list[GeometryItem]:
     """Pick which tiers are in play for this (difficulty, grade) combo.
@@ -1179,10 +1203,13 @@ def _geometry_pool(difficulty: Difficulty, grade: Grade) -> list[GeometryItem]:
     else:
         tier = base_tier
 
+    # Visual shape questions ride along with the EASY tier (they're
+    # identification-level). Entries may be 3-tuples (text-only) or
+    # 4-tuples (with a figure); _generate_geometry normalizes both.
     if tier == 0:
-        return _GEOMETRY_EASY
+        return _GEOMETRY_EASY + _GEOMETRY_VISUAL
     if tier == 1:
-        return _GEOMETRY_EASY + _GEOMETRY_MEDIUM
+        return _GEOMETRY_EASY + _GEOMETRY_VISUAL + _GEOMETRY_MEDIUM
     return _GEOMETRY_MEDIUM + _GEOMETRY_HARD
 
 
@@ -1291,13 +1318,20 @@ def _pick_factory(math_type: MathType, difficulty: Difficulty, grade: Grade) -> 
 def _generate_geometry(difficulty: Difficulty, grade: Grade, rng: random.Random):
     # Geometry draws from a curated, level-aware pool. Each tier has
     # well over 10 entries, so sampling without replacement always
-    # yields 10 unique questions.
+    # yields 10 unique questions. Pool entries are 3-tuples (text-only)
+    # or 4-tuples (with a figure to draw).
     pool = _geometry_pool(difficulty, grade)
     picks = rng.sample(pool, k=10)
-    return [
-        QuestionInternal(id=i, question=text, correctAnswer=ans, explanation=expl)
-        for i, (text, ans, expl) in enumerate(picks)
-    ]
+    questions: list[QuestionInternal] = []
+    for i, item in enumerate(picks):
+        text, ans, expl = item[0], item[1], item[2]
+        figure = item[3] if len(item) > 3 else None
+        questions.append(
+            QuestionInternal(
+                id=i, question=text, correctAnswer=ans, explanation=expl, figure=figure
+            )
+        )
+    return questions
 
 
 def _generate_typed(math_type: MathType, difficulty: Difficulty, grade: Grade, rng: random.Random):
@@ -1333,20 +1367,28 @@ def _generate_mixed(difficulty: Difficulty, grade: Grade, rng: random.Random):
     seen_sig: set[tuple] = set()
     seen_text: set[str] = set()
     for i in range(10):
+        figure = None
         for _ in range(_MAX_ATTEMPTS):
             math_type = rng.choice(pool_types)
             if math_type == MathType.geometry:
-                text, answer, explanation = rng.choice(_geometry_pool(difficulty, grade))
+                item = rng.choice(_geometry_pool(difficulty, grade))
+                text, answer, explanation = item[0], item[1], item[2]
+                figure = item[3] if len(item) > 3 else None
                 signature = ("geo", text)
             else:
                 factory = _pick_factory(math_type, difficulty, grade)
                 signature, text, answer, explanation = factory(rng, lo, hi)
+                figure = None
+            # Dedup by text so a mixed quiz never repeats wording (a
+            # visual "how many sides…" appears at most once).
             if signature not in seen_sig and text not in seen_text:
                 break
         seen_sig.add(signature)
         seen_text.add(text)
         questions.append(
-            QuestionInternal(id=i, question=text, correctAnswer=answer, explanation=explanation)
+            QuestionInternal(
+                id=i, question=text, correctAnswer=answer, explanation=explanation, figure=figure
+            )
         )
     return questions
 

@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import confetti from "canvas-confetti";
 import type { QuizResult } from "@/lib/api";
 import { recommendNext, type Difficulty, type Grade } from "@/data/quizConfig";
+import ShapeFigure from "./ShapeFigure";
 
 interface Props {
   result: QuizResult;
@@ -92,6 +93,9 @@ const ResultsScreen = ({ result, level, onTryLevel, onRedo, onHome }: Props) => 
             <div className="flex items-start gap-3">
               <span className="text-xl">{r.correct ? "✅" : "❌"}</span>
               <div className="flex-1">
+                {r.figure && (
+                  <ShapeFigure shape={r.figure} className="w-16 h-16 mb-1" />
+                )}
                 <p className="font-heading font-semibold">{r.question}</p>
                 <p className="text-sm text-muted-foreground">
                   Your answer: <span className="font-bold">{r.userAnswer ?? "—"}</span>
