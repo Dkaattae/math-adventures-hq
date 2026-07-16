@@ -95,6 +95,13 @@ docker compose up -d --build
 Stop it with `docker compose down`, or `docker compose down -v` to also
 wipe the Postgres volume.
 
+## Deploying
+
+See **[DEPLOYMENT.md](./DEPLOYMENT.md)** for a step-by-step guide to
+deploying on **Railway** (single container) with a **Supabase** Postgres
+database. Schema is managed by Alembic and applied automatically on
+startup.
+
 ## Local development (hot reload)
 
 Two processes with HMR: Vite on `:8080`, FastAPI on `:8000`, with Vite

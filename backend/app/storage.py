@@ -12,6 +12,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from .db_models import LeaderboardRow, QuizResultRow, QuizRow, UserRow
+from .leveling import next_level
 from .models import (
     Difficulty,
     Grade,
@@ -279,43 +280,26 @@ def query_user_stats(db: Session, username: str) -> UserStats:
     )
 
 
-_GRADE_LADDER = [Grade.K, Grade.G1, Grade.G2, Grade.G3, Grade.G4, Grade.G5]
-_DIFF_LADDER = [Difficulty.easy, Difficulty.medium, Difficulty.hard]
-
-
 def suggest_level(db: Session, username: str) -> Optional[SuggestedLevel]:
     """Recommend a starting level from recent history.
 
-    Looks at the player's most recent quizzes at their latest level and
-    nudges up (avg >= 9), down (avg <= 4), or holds — the history-based
-    counterpart to the end-of-quiz recommendation on the results screen.
-    Returns None when there's nothing to go on.
+    Averages the player's recent quizzes at their latest level and steps
+    through the shared ladder (app.leveling.next_level) — the same
+    up/down logic the end-of-quiz recommendation uses, so the two never
+    disagree. Returns None when there's nothing to go on.
     """
     rows = [r for r in _user_entries(db, username) if r.grade and r.difficulty]
     if not rows:
         return None
 
     latest = rows[0]
-    grade, difficulty = Grade(latest.grade), Difficulty(latest.difficulty)
-
     # Average across the recent runs that share the latest level.
     same_level = [
         r for r in rows[:10] if r.grade == latest.grade and r.difficulty == latest.difficulty
     ]
     avg = sum(r.score for r in same_level) / len(same_level)
 
-    gi, di = _GRADE_LADDER.index(grade), _DIFF_LADDER.index(difficulty)
-    if avg >= 9:
-        if di < len(_DIFF_LADDER) - 1:
-            difficulty = _DIFF_LADDER[di + 1]
-        elif gi < len(_GRADE_LADDER) - 1:
-            grade, difficulty = _GRADE_LADDER[gi + 1], Difficulty.easy
-    elif avg <= 4:
-        if di > 0:
-            difficulty = _DIFF_LADDER[di - 1]
-        elif gi > 0:
-            grade, difficulty = _GRADE_LADDER[gi - 1], Difficulty.hard
-
+    grade, difficulty, _ = next_level(Grade(latest.grade), Difficulty(latest.difficulty), avg)
     return SuggestedLevel(grade=grade, difficulty=difficulty, basedOn=len(same_level))
 
 

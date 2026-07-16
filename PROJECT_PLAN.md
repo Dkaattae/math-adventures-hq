@@ -24,8 +24,8 @@ Completed work moves to the **Done** section at the bottom.
 
 ## 2. Known bugs & issues
 
-New findings from the 2026-07-15 audit (after the depth-features work).
-Ordered by impact.
+From the 2026-07-15 audit. Items 2 (Alembic) and 4 (unified level logic)
+are now fixed — see Done. Remaining, ordered by impact:
 
 1. **No PIN recovery + no login rate-limiting.** A kid who forgets their
    4-digit PIN is locked out of that name permanently, and `POST
@@ -33,24 +33,13 @@ Ordered by impact.
    brute-forceable. Given the audience the stakes are low, but a
    "forgot PIN?" path (even a soft reset) and basic rate-limiting are
    worth it. Usernames are also still an open, unauthenticated namespace.
-2. **Schema changes need Alembic — `pin_hash` won't appear on an existing
-   Postgres DB.** `init_engine` uses `Base.metadata.create_all`, which
-   only creates missing *tables*, never adds *columns*. The new
-   `users.pin_hash` column will be present on any fresh database (dev
-   sqlite, CI, a new deploy) but a pre-existing Postgres volume would
-   need a manual migration or it errors on user creation/login. This
-   makes the long-standing "adopt Alembic" item now load-bearing.
-3. **`suggest_level` ignores the topic.** The history-based level
+2. **`suggest_level` ignores the topic.** The history-based level
    suggestion looks at the most recent quiz's level regardless of
    subject, so a kid who's strong at addition but new to fractions gets
-   the same suggested level for both. It should be per-topic.
-4. **`recommendNext` (results screen) and `suggest_level` (setup screen)
-   can disagree.** They implement the same up/down ladder in two places
-   (TS and Python) from different inputs (last score vs. recent average),
-   so the "try Grade 4!" nudge after a quiz may not match the level
-   pre-filled on the next visit. Unify the rule (ideally one
-   server-side source of truth) to avoid a confusing mismatch.
-5. **Stats/suggested-level endpoints are unauthenticated.** Anyone can
+   the same suggested level for both. It should be per-topic. (Now that
+   the ladder is centralized in `app/leveling.py`, this is a small change
+   to which rows `suggest_level` averages over.)
+3. **Stats/suggested-level endpoints are unauthenticated.** Anyone can
    read any player's progress by guessing a username. Low severity for
    this app, but if PINs are meant to "own" a name, stats arguably
    should sit behind login too.
@@ -102,10 +91,6 @@ Ordered by impact.
   and each new field (options, figure, pin, stats) has to be added to all
   three by hand; this is exactly how the frontend once drifted onto mock
   data unnoticed.
-- **Unify the level-recommendation logic.** `recommendNext` (TS) and
-  `suggest_level` (Python) encode the same grade/difficulty ladder twice
-  — collapse to one server-side rule the results screen also consumes
-  (see bug #4).
 - **`leaderboard` table is doing double duty** as both the ranking board
   and each user's quiz history (via `query_user_stats`). Consider a
   dedicated history/attempts table, or rename to reflect that it's an
@@ -118,8 +103,6 @@ Ordered by impact.
   grade for every type; multiplication should probably cap factors near
   12 (times tables) regardless of range, and fractions difficulty is
   better driven by denominator size than by the shared range.
-- **Alembic migrations** instead of `create_all()` — now load-bearing
-  because of the new `users.pin_hash` column (see bug #2).
 
 ---
 
@@ -127,14 +110,32 @@ Ordered by impact.
 
 | Phase | Items | Why first |
 |---|---|---|
-| 1 — hardening | Alembic migrations (§2.2); unify level logic (§2.4); PIN recovery + login rate-limit (§2.1) | The depth features added surface area that now needs shoring up |
-| 2 — polish | Per-topic level suggestion (§2.3); worksheet export; practice vs. challenge mode; more visual questions | Additive product depth on a solid base |
+| 1 — hardening | PIN recovery + login rate-limit (§2.1); stats behind login (§2.3) | Remaining security/robustness gaps from the accounts work |
+| 2 — polish | Per-topic level suggestion (§2.2); worksheet export; practice vs. challenge mode; more visual questions | Additive product depth on a solid base |
 
 ---
 
 ## Done
 
 Completed items, newest first.
+
+### 2026-07-15 — Alembic, unified level logic, deploy guide
+
+- **Alembic migrations replace `create_all`.** Schema is now versioned in
+  `backend/migrations/`; the app runs `alembic upgrade head` at startup
+  (opt out with `SKIP_MIGRATIONS=1`), so fresh databases get the full
+  schema — `pin_hash` included — and future column changes have a home.
+  `DATABASE_URL` is also normalized so a pasted Supabase `postgresql://`
+  string works with the psycopg driver, and the container binds Railway's
+  `$PORT`.
+- **Unified the level-recommendation ladder.** One source of truth,
+  `app/leveling.py: next_level`, now drives both the end-of-quiz
+  recommendation (returned on the quiz-submit response) and the
+  returning-player `suggest_level`; the frontend only turns the server's
+  decision into text (`recommendationText`), so the two can no longer
+  disagree (was bug #4).
+- **Deployment guide.** `DEPLOYMENT.md` documents a Railway + Supabase
+  single-container deploy end to end.
 
 ### 2026-07-15 — depth features
 

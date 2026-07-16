@@ -8,12 +8,16 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from .db import init_engine
+from .db import init_engine, run_migrations
 from .routers import leaderboard, quizzes, users
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Bring the schema to head before serving. Set SKIP_MIGRATIONS=1 to
+    # opt out (e.g. when a deploy runs `alembic upgrade head` separately).
+    if os.environ.get("SKIP_MIGRATIONS") != "1":
+        run_migrations()
     init_engine()
     yield
 

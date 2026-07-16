@@ -123,6 +123,13 @@ class QuizSubmit(BaseModel):
     timeUsedSeconds: int = Field(ge=0)
 
 
+class Recommendation(BaseModel):
+    """What to play next, from the shared level ladder (app/leveling.py)."""
+    direction: str  # "up" | "steady" | "down"
+    grade: Grade
+    difficulty: Difficulty
+
+
 class QuizResult(BaseModel):
     quizId: UUID
     username: str
@@ -132,6 +139,7 @@ class QuizResult(BaseModel):
     badge: Optional[str] = None
     results: list[QuestionResult]
     submittedAt: datetime
+    recommendation: Optional[Recommendation] = None
 
 
 # ---------- leaderboard ----------
