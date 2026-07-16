@@ -93,14 +93,21 @@ export function topicsForGrade(grade: Grade): MathType[] {
 }
 
 // ---------- adaptive level recommendation ----------
-
-const GRADE_ORDER: Grade[] = ["K", "1", "2", "3", "4", "5"];
-const DIFFICULTY_ORDER: Difficulty[] = ["easy", "medium", "hard"];
+//
+// The ladder logic (which way is "up") lives on the server in one place
+// (app/leveling.py). The quiz-submit response carries a ServerRecommendation
+// — the direction plus the target level — and this module only turns that
+// decision into kid-facing text, so the two can never disagree.
 
 export const gradeLabel = (g: Grade) => (g === "K" ? "Kindergarten" : `Grade ${g}`);
 
+export interface ServerRecommendation {
+  direction: "up" | "steady" | "down";
+  grade: Grade;
+  difficulty: Difficulty;
+}
+
 export interface Recommendation {
-  kind: "level-up" | "steady" | "ease";
   headline: string;
   detail: string;
   /** Level to start if the player accepts. */
@@ -111,81 +118,64 @@ export interface Recommendation {
 }
 
 /**
- * Suggest what to do next based on the quiz just finished. A lightweight
- * stand-in for full adaptive difficulty: it reacts to a single score
- * rather than a tracked history, but gives kids the "you're so good,
- * level up!" nudge (or a gentle "let's warm up" when they struggled).
+ * Build the kid-facing recommendation card from the level just played and
+ * the server's decision about what to play next.
  */
-export function recommendNext(
-  grade: Grade,
-  difficulty: Difficulty,
+export function recommendationText(
+  current: { grade: Grade; difficulty: Difficulty },
+  server: ServerRecommendation,
   score: number,
 ): Recommendation {
-  const gi = GRADE_ORDER.indexOf(grade);
-  const di = DIFFICULTY_ORDER.indexOf(difficulty);
-  const here = `${gradeLabel(grade)} ${difficulty}`;
+  const here = `${gradeLabel(current.grade)} ${current.difficulty}`;
+  const sameLevel = server.grade === current.grade && server.difficulty === current.difficulty;
+  const targetLabel =
+    server.grade === current.grade
+      ? `${server.difficulty} mode`
+      : `${gradeLabel(server.grade)} (${server.difficulty})`;
 
-  const levelLabel = (g: Grade, d: Difficulty) =>
-    g === grade ? `${d} mode` : `${gradeLabel(g)} (${d})`;
-
-  if (score >= 9) {
-    let next: { grade: Grade; difficulty: Difficulty } | null = null;
-    if (di < DIFFICULTY_ORDER.length - 1) next = { grade, difficulty: DIFFICULTY_ORDER[di + 1] };
-    else if (gi < GRADE_ORDER.length - 1) next = { grade: GRADE_ORDER[gi + 1], difficulty: "easy" };
-
-    if (!next) {
+  if (server.direction === "up") {
+    if (sameLevel) {
       return {
-        kind: "level-up",
         headline: "🏆 Legend!",
         detail: `${score}/10 on the very hardest level — ${here}. You've mastered it all!`,
-        grade,
-        difficulty,
+        grade: server.grade,
+        difficulty: server.difficulty,
         cta: null,
       };
     }
-    const label = levelLabel(next.grade, next.difficulty);
     return {
-      kind: "level-up",
       headline: "🌟 Wow, you're on fire!",
-      detail: `You aced ${here} with ${score}/10 — you're so good, you're ready for ${label}!`,
-      grade: next.grade,
-      difficulty: next.difficulty,
-      cta: `Try ${label} →`,
+      detail: `You aced ${here} with ${score}/10 — you're so good, you're ready for ${targetLabel}!`,
+      grade: server.grade,
+      difficulty: server.difficulty,
+      cta: `Try ${targetLabel} →`,
     };
   }
 
-  if (score <= 4) {
-    let next: { grade: Grade; difficulty: Difficulty } | null = null;
-    if (di > 0) next = { grade, difficulty: DIFFICULTY_ORDER[di - 1] };
-    else if (gi > 0) next = { grade: GRADE_ORDER[gi - 1], difficulty: "hard" };
-
-    if (!next) {
+  if (server.direction === "down") {
+    if (sameLevel) {
       return {
-        kind: "ease",
         headline: "🌱 Keep going!",
         detail: `Every math star started right here. Want another go at ${here}?`,
-        grade,
-        difficulty,
+        grade: server.grade,
+        difficulty: server.difficulty,
         cta: "Try again →",
       };
     }
-    const label = levelLabel(next.grade, next.difficulty);
     return {
-      kind: "ease",
       headline: "🤗 Good effort!",
-      detail: `${here} is tricky — ${score}/10 is a solid start. Want to warm up with ${label} first?`,
-      grade: next.grade,
-      difficulty: next.difficulty,
-      cta: `Try ${label} →`,
+      detail: `${here} is tricky — ${score}/10 is a solid start. Want to warm up with ${targetLabel} first?`,
+      grade: server.grade,
+      difficulty: server.difficulty,
+      cta: `Try ${targetLabel} →`,
     };
   }
 
   return {
-    kind: "steady",
     headline: "💪 Nice work!",
     detail: `You're getting the hang of ${here} with ${score}/10. A little more practice and you'll ace it!`,
-    grade,
-    difficulty,
+    grade: server.grade,
+    difficulty: server.difficulty,
     cta: "Practice again →",
   };
 }

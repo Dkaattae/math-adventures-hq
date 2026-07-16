@@ -42,6 +42,12 @@ export interface Quiz {
   createdAt: string;
 }
 
+export interface Recommendation {
+  direction: "up" | "steady" | "down";
+  grade: Grade;
+  difficulty: Difficulty;
+}
+
 export interface QuizResult {
   quizId: string;
   username: string;
@@ -51,6 +57,7 @@ export interface QuizResult {
   badge: string | null;
   results: QuestionResult[];
   submittedAt: string;
+  recommendation?: Recommendation | null;
 }
 
 export interface LeaderboardEntry {

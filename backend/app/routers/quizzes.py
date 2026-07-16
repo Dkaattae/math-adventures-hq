@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from .. import storage
 from ..db import get_session
+from ..leveling import next_level
 from ..models import (
     ErrorResponse,
     Difficulty,
@@ -18,6 +19,7 @@ from ..models import (
     QuizCreate,
     QuizResult,
     QuizSubmit,
+    Recommendation,
 )
 from ..questions import generate_questions, grade_answer
 
@@ -134,6 +136,9 @@ def submit_quiz(
     # penalize honest sub-second clock skew).
     server_elapsed = max(0, int((submitted_at - row.created_at).total_seconds()) + 1)
     time_used = min(payload.timeUsedSeconds, server_elapsed)
+    rec_grade, rec_difficulty, direction = next_level(
+        Grade(row.grade), Difficulty(row.difficulty), score
+    )
     result = QuizResult(
         quizId=quiz_id,
         username=row.username,
@@ -143,6 +148,9 @@ def submit_quiz(
         badge=_badge_for(score),
         results=results,
         submittedAt=submitted_at,
+        recommendation=Recommendation(
+            direction=direction.value, grade=rec_grade, difficulty=rec_difficulty
+        ),
     )
     storage.mark_submitted(db, quiz_id, result)
     storage.add_leaderboard_entry(

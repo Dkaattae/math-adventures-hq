@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import confetti from "canvas-confetti";
 import type { QuizResult } from "@/lib/api";
-import { recommendNext, type Difficulty, type Grade } from "@/data/quizConfig";
+import { recommendationText, type Difficulty, type Grade } from "@/data/quizConfig";
 import ShapeFigure from "./ShapeFigure";
 
 interface Props {
@@ -23,7 +23,12 @@ const ResultsScreen = ({ result, level, onTryLevel, onRedo, onHome }: Props) => 
   const mins = Math.floor(result.timeUsedSeconds / 60);
   const secs = result.timeUsedSeconds % 60;
 
-  const recommendation = level ? recommendNext(level.grade, level.difficulty, score) : null;
+  // The server decides the next level (shared ladder); this screen only
+  // renders it into kid-facing text.
+  const recommendation =
+    level && result.recommendation
+      ? recommendationText(level, result.recommendation, score)
+      : null;
 
   useEffect(() => {
     if (score >= 7) {

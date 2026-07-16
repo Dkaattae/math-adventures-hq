@@ -39,4 +39,6 @@ WORKDIR /app/backend
 EXPOSE 8000
 
 # DATABASE_URL is injected by docker-compose / your deploy env.
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Bind to $PORT when the platform sets one (e.g. Railway), else 8000.
+# Migrations run automatically at startup (see app.main lifespan).
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
