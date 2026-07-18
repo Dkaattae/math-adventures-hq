@@ -22,8 +22,11 @@ const SetupScreen = ({ username, onStart, onShowProgress }: Props) => {
   const [mathType, setMathType] = useState<MathType | null>(null);
   const [difficulty, setDifficulty] = useState<Difficulty | null>(null);
   const [answerMode, setAnswerMode] = useState<AnswerMode>("typing");
-  const [suggested, setSuggested] = useState(false);
+  const [suggested, setSuggested] = useState<"history" | "fresh" | null>(null);
   const suggestionApplied = useRef(false);
+  // Once the kid picks a grade/difficulty by hand, suggestions never
+  // override that choice.
+  const manualPick = useRef({ grade: false, difficulty: false });
 
   // History-based adaptive difficulty: pre-select the level the backend
   // recommends from the player's recent performance (they can still
@@ -36,11 +39,33 @@ const SetupScreen = ({ username, onStart, onShowProgress }: Props) => {
         suggestionApplied.current = true;
         setGrade((g) => g ?? level.grade);
         setDifficulty((d) => d ?? level.difficulty);
-        setSuggested(true);
+        setSuggested("history");
       })
       .catch(() => { /* suggestion is optional */ });
     return () => { cancelled = true; };
   }, [username]);
+
+  // Per-topic refinement: when a topic is chosen, re-suggest from that
+  // topic's history (a kid strong at addition but new to fractions
+  // shouldn't start fractions on hard). Manual picks always win.
+  useEffect(() => {
+    if (!mathType) return;
+    let cancelled = false;
+    getSuggestedLevel(username, mathType)
+      .then((level) => {
+        if (cancelled || !level) return;
+        if (manualPick.current.grade && manualPick.current.difficulty) return;
+        if (!manualPick.current.grade && isTopicAvailable(mathType, level.grade)) {
+          setGrade(level.grade);
+        }
+        if (!manualPick.current.difficulty) {
+          setDifficulty(level.difficulty);
+        }
+        setSuggested(level.basedOn === 0 ? "fresh" : "history");
+      })
+      .catch(() => { /* suggestion is optional */ });
+    return () => { cancelled = true; };
+  }, [username, mathType]);
 
   // Topics are gated by grade; before a grade is chosen we show them all
   // so the kid can browse.
@@ -83,14 +108,20 @@ const SetupScreen = ({ username, onStart, onShowProgress }: Props) => {
         <Section title="Pick your grade 🎒">
           <div className="grid grid-cols-6 gap-2">
             {grades.map((g) => (
-              <OptionButton key={g} selected={grade === g} onClick={() => setGrade(g)}>
+              <OptionButton
+                key={g}
+                selected={grade === g}
+                onClick={() => { manualPick.current.grade = true; setGrade(g); }}
+              >
                 {g === "K" ? "K" : g}
               </OptionButton>
             ))}
           </div>
           {suggested && (
             <p className="text-sm text-muted-foreground font-body mt-2 text-center">
-              ✨ We picked up where you left off — change it if you like!
+              {suggested === "fresh"
+                ? "✨ First time with this topic — we'll start you off easy!"
+                : "✨ We picked up where you left off — change it if you like!"}
             </p>
           )}
         </Section>
@@ -115,7 +146,11 @@ const SetupScreen = ({ username, onStart, onShowProgress }: Props) => {
         <Section title="How tough? 💪">
           <div className="grid grid-cols-3 gap-2">
             {difficulties.map((d) => (
-              <OptionButton key={d} selected={difficulty === d} onClick={() => setDifficulty(d)}>
+              <OptionButton
+                key={d}
+                selected={difficulty === d}
+                onClick={() => { manualPick.current.difficulty = true; setDifficulty(d); }}
+              >
                 {difficultyConfig[d].emoji} {difficultyConfig[d].label}
               </OptionButton>
             ))}

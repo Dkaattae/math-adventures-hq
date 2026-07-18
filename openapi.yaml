@@ -130,6 +130,50 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
 
+  /api/users/{username}/stats:
+    get:
+      tags: [users]
+      summary: A player's progress — totals, per-topic stats, recent quizzes
+      parameters:
+        - in: path
+          name: username
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Aggregated stats (all zeros/empty for an unknown or new player)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserStats" }
+
+  /api/users/{username}/suggested-level:
+    get:
+      tags: [users]
+      summary: Level to start a returning player at, from their recent history
+      parameters:
+        - in: path
+          name: username
+          required: true
+          schema: { type: string }
+        - in: query
+          name: mathType
+          required: false
+          schema: { $ref: "#/components/schemas/MathType" }
+          description: |
+            Compute the suggestion from this topic's history only. A topic
+            the player has never tried gets a fresh start (their usual
+            grade, clamped up to the topic's entry grade, at easy —
+            basedOn=0). Omit for overall history.
+      responses:
+        "200":
+          description: The suggestion, or null when the player has no history
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/SuggestedLevel"
+                  - type: "null"
+
   /api/quizzes:
     post:
       tags: [quizzes]
@@ -312,6 +356,55 @@ components:
               type: string
               description: One-time rescue code for PIN resets. Shown only in this response.
               example: "gold-otter-731"
+
+    TopicStat:
+      type: object
+      required: [mathType, quizzes, averageScore, bestScore]
+      properties:
+        mathType:     { $ref: "#/components/schemas/MathType" }
+        quizzes:      { type: integer }
+        averageScore: { type: number }
+        bestScore:    { type: integer }
+
+    RecentQuiz:
+      type: object
+      required: [score, total, time, achievedAt]
+      properties:
+        mathType:   { $ref: "#/components/schemas/MathType" }
+        grade:      { $ref: "#/components/schemas/Grade" }
+        difficulty: { $ref: "#/components/schemas/Difficulty" }
+        score:      { type: integer }
+        total:      { type: integer }
+        time:       { type: string, example: "1m 20s" }
+        achievedAt: { type: string, format: date-time }
+
+    UserStats:
+      type: object
+      required: [username, totalQuizzes, averageScore, bestScore, byTopic, recent]
+      properties:
+        username:     { type: string }
+        totalQuizzes: { type: integer }
+        averageScore: { type: number }
+        bestScore:    { type: integer }
+        byTopic:
+          type: array
+          items: { $ref: "#/components/schemas/TopicStat" }
+        recent:
+          type: array
+          items: { $ref: "#/components/schemas/RecentQuiz" }
+
+    SuggestedLevel:
+      type: object
+      required: [grade, difficulty, basedOn]
+      properties:
+        grade:      { $ref: "#/components/schemas/Grade" }
+        difficulty: { $ref: "#/components/schemas/Difficulty" }
+        basedOn:
+          type: integer
+          description: Recent quizzes that informed the suggestion (0 = topic never played).
+        mathType:
+          $ref: "#/components/schemas/MathType"
+          description: Topic the suggestion is for; absent/null when computed from overall history.
 
     Question:
       type: object

@@ -200,7 +200,9 @@ class SuggestedLevel(BaseModel):
     """Next level to start a returning player at, from their history."""
     grade: Grade
     difficulty: Difficulty
-    basedOn: int  # how many recent quizzes informed the suggestion
+    basedOn: int  # recent quizzes that informed the suggestion (0 = new topic)
+    # Topic the suggestion was computed for; None = overall history.
+    mathType: Optional[MathType] = None
 
 
 # ---------- errors ----------

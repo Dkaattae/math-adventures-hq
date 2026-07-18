@@ -27,17 +27,11 @@ Completed work moves to the **Done** section at the bottom.
 From the 2026-07-15 audit; items are struck off as they land (see Done).
 Remaining, ordered by impact:
 
-1. **`suggest_level` ignores the topic.** The history-based level
-   suggestion looks at the most recent quiz's level regardless of
-   subject, so a kid who's strong at addition but new to fractions gets
-   the same suggested level for both. It should be per-topic. (Now that
-   the ladder is centralized in `app/leveling.py`, this is a small change
-   to which rows `suggest_level` averages over.)
-2. **Stats/suggested-level endpoints are unauthenticated.** Anyone can
+1. **Stats/suggested-level endpoints are unauthenticated.** Anyone can
    read any player's progress by guessing a username. Low severity for
    this app, but if PINs are meant to "own" a name, stats arguably
    should sit behind login too.
-3. **Usernames are an open namespace.** Creation is unauthenticated and
+2. **Usernames are an open namespace.** Creation is unauthenticated and
    unthrottled, and the charset is unrestricted — someone could squat
    names or fill the users table. Restrict to a sane charset and add a
    creation rate limit. (Login/reset brute-forcing is now covered by the
@@ -109,14 +103,28 @@ Remaining, ordered by impact:
 
 | Phase | Items | Why first |
 |---|---|---|
-| 1 — hardening | Username namespace (§2.3); stats behind login (§2.2) | Remaining security/robustness gaps from the accounts work |
-| 2 — polish | Per-topic level suggestion (§2.1); worksheet export; practice vs. challenge mode; more visual questions | Additive product depth on a solid base |
+| 1 — hardening | Username namespace (§2.2); stats behind login (§2.1) | Remaining security/robustness gaps from the accounts work |
+| 2 — polish | Worksheet export; practice vs. challenge mode; more visual questions | Additive product depth on a solid base |
 
 ---
 
 ## Done
 
 Completed items, newest first.
+
+### 2026-07-18 — per-topic level suggestions
+
+- **`suggest_level` is now topic-aware.** `GET
+  /api/users/{name}/suggested-level?mathType=fractions` computes the
+  suggestion from that topic's history only, so a kid strong at addition
+  no longer starts fractions on hard. A never-played topic gets a fresh
+  start (their usual grade, clamped up to the topic's entry grade, at
+  easy — `basedOn=0`), and stepping down never suggests a grade below
+  the topic's entry grade. The setup screen re-suggests when a topic is
+  picked, never overriding a manual grade/difficulty choice, with a
+  "first time with this topic — we'll start you off easy!" hint for
+  fresh topics. The stats and suggested-level endpoints are now also
+  documented in `openapi.yaml` (they'd been missed).
 
 ### 2026-07-16 — PIN recovery + login lockout (was §2.1)
 

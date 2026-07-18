@@ -76,6 +76,12 @@ def types_available(grade: Grade) -> list[MathType]:
     return [t for t in MathType if _MIN_GRADE_FOR_TYPE[t] <= g]
 
 
+def min_grade_for_type(math_type: MathType) -> Grade:
+    """Lowest grade a topic is offered at, as a Grade enum member."""
+    g = _MIN_GRADE_FOR_TYPE[math_type]
+    return Grade.K if g == 0 else Grade(str(g))
+
+
 def _difficulty_range(difficulty: Difficulty, grade: Grade) -> tuple[int, int]:
     g = 0 if grade == Grade.K else int(grade.value)
     base = g * 3

@@ -7,6 +7,7 @@ from .. import storage
 from ..db import get_session
 from ..models import (
     ErrorResponse,
+    MathType,
     PinReset,
     SuggestedLevel,
     User,
@@ -101,5 +102,9 @@ def user_stats(username: str, db: Session = Depends(get_session)) -> UserStats:
 
 
 @router.get("/{username}/suggested-level", response_model=Optional[SuggestedLevel])
-def suggested_level(username: str, db: Session = Depends(get_session)) -> Optional[SuggestedLevel]:
-    return storage.suggest_level(db, username)
+def suggested_level(
+    username: str,
+    mathType: Optional[MathType] = None,
+    db: Session = Depends(get_session),
+) -> Optional[SuggestedLevel]:
+    return storage.suggest_level(db, username, mathType)

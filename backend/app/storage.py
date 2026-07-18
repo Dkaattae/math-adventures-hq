@@ -373,17 +373,48 @@ def query_user_stats(db: Session, username: str) -> UserStats:
     )
 
 
-def suggest_level(db: Session, username: str) -> Optional[SuggestedLevel]:
+_GRADE_ORDER = list(Grade)
+
+
+def _clamp_to_topic(math_type: MathType, grade: Grade, difficulty: Difficulty):
+    """Keep a suggestion inside the grades where the topic exists.
+
+    Stepping down from a topic's entry level would otherwise suggest a
+    grade the topic isn't offered at (e.g. fractions at grade 1)."""
+    from .questions import min_grade_for_type
+
+    floor = min_grade_for_type(math_type)
+    if _GRADE_ORDER.index(grade) < _GRADE_ORDER.index(floor):
+        return floor, Difficulty.easy
+    return grade, difficulty
+
+
+def suggest_level(
+    db: Session, username: str, math_type: Optional[MathType] = None
+) -> Optional[SuggestedLevel]:
     """Recommend a starting level from recent history.
 
-    Averages the player's recent quizzes at their latest level and steps
+    With a math_type, only that topic's history counts — a kid who's
+    strong at addition but new to fractions shouldn't get addition's
+    level suggested for fractions. A topic they've never played gets a
+    fresh start: their usual grade (clamped up to the topic's entry
+    grade) at easy, with basedOn=0.
+
+    Averages the recent quizzes at the (topic's) latest level and steps
     through the shared ladder (app.leveling.next_level) — the same
     up/down logic the end-of-quiz recommendation uses, so the two never
-    disagree. Returns None when there's nothing to go on.
+    disagree. Returns None when there's no history at all.
     """
     rows = [r for r in _user_entries(db, username) if r.grade and r.difficulty]
     if not rows:
         return None
+
+    if math_type is not None:
+        topic_rows = [r for r in rows if r.math_type == math_type.value]
+        if not topic_rows:
+            grade, difficulty = _clamp_to_topic(math_type, Grade(rows[0].grade), Difficulty.easy)
+            return SuggestedLevel(grade=grade, difficulty=difficulty, basedOn=0, mathType=math_type)
+        rows = topic_rows
 
     latest = rows[0]
     # Average across the recent runs that share the latest level.
@@ -393,7 +424,11 @@ def suggest_level(db: Session, username: str) -> Optional[SuggestedLevel]:
     avg = sum(r.score for r in same_level) / len(same_level)
 
     grade, difficulty, _ = next_level(Grade(latest.grade), Difficulty(latest.difficulty), avg)
-    return SuggestedLevel(grade=grade, difficulty=difficulty, basedOn=len(same_level))
+    if math_type is not None:
+        grade, difficulty = _clamp_to_topic(math_type, grade, difficulty)
+    return SuggestedLevel(
+        grade=grade, difficulty=difficulty, basedOn=len(same_level), mathType=math_type
+    )
 
 
 def reset(db: Session) -> None:

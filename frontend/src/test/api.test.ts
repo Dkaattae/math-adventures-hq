@@ -90,6 +90,18 @@ describe("api client", () => {
     expect(result.available).toBe(true);
   });
 
+  it("getSuggestedLevel adds the mathType filter only when given", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ grade: "3", difficulty: "easy", basedOn: 2 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { getSuggestedLevel } = await import("@/lib/api");
+
+    await getSuggestedLevel("Kid");
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/users/Kid/suggested-level");
+
+    await getSuggestedLevel("Kid", "fractions");
+    expect(fetchMock.mock.calls[1][0]).toBe("/api/users/Kid/suggested-level?mathType=fractions");
+  });
+
   it("getLeaderboard builds query params only for provided filters", async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse([]));
     vi.stubGlobal("fetch", fetchMock);

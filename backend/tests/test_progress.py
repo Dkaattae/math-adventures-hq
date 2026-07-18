@@ -90,3 +90,53 @@ def test_suggested_level_holds_for_middling_scores(client, db_session):
     body = client.get("/api/users/Fay/suggested-level").json()
     assert body["grade"] == "2"
     assert body["difficulty"] == "medium"
+
+
+# ---------- per-topic suggestions ----------
+
+
+def test_suggested_level_is_per_topic(client, db_session):
+    """Strong at addition, shaky at fractions → different suggestions."""
+    _play(client, db_session, "Gil", "fractions", "3", "medium", correct_count=3)
+    _play(client, db_session, "Gil", "addition", "3", "easy", correct_count=10)
+
+    add = client.get("/api/users/Gil/suggested-level", params={"mathType": "addition"}).json()
+    assert (add["grade"], add["difficulty"]) == ("3", "medium")  # aced easy → up
+    assert add["mathType"] == "addition"
+
+    frac = client.get("/api/users/Gil/suggested-level", params={"mathType": "fractions"}).json()
+    assert (frac["grade"], frac["difficulty"]) == ("3", "easy")  # struggled → down
+    assert frac["mathType"] == "fractions"
+
+
+def test_suggested_level_fresh_topic_starts_easy_at_home_grade(client, db_session):
+    """No history in a topic → the kid's usual grade at easy, basedOn 0."""
+    _play(client, db_session, "Hana", "addition", "4", "hard", correct_count=10)
+
+    r = client.get("/api/users/Hana/suggested-level", params={"mathType": "geometry"}).json()
+    assert (r["grade"], r["difficulty"]) == ("4", "easy")
+    assert r["basedOn"] == 0
+
+
+def test_suggested_level_fresh_topic_respects_topic_entry_grade(client, db_session):
+    """A K player peeking at percentages (grade 4+) gets the topic's floor."""
+    _play(client, db_session, "Ivo", "addition", "K", "easy", correct_count=8)
+
+    r = client.get("/api/users/Ivo/suggested-level", params={"mathType": "percentages"}).json()
+    assert (r["grade"], r["difficulty"]) == ("4", "easy")
+
+
+def test_suggested_level_never_steps_below_topic_entry_grade(client, db_session):
+    """Struggling at a topic's entry level holds at its floor, not grade-1 hard."""
+    _play(client, db_session, "Jo", "fractions", "2", "easy", correct_count=1)
+
+    r = client.get("/api/users/Jo/suggested-level", params={"mathType": "fractions"}).json()
+    # fractions unlock at grade 2 — never suggest grade 1
+    assert (r["grade"], r["difficulty"]) == ("2", "easy")
+
+
+def test_suggested_level_without_topic_is_overall(client, db_session):
+    _play(client, db_session, "Kai", "addition", "2", "easy", correct_count=10)
+    r = client.get("/api/users/Kai/suggested-level").json()
+    assert (r["grade"], r["difficulty"]) == ("2", "medium")
+    assert r["mathType"] is None
