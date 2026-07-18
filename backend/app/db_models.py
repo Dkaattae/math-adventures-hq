@@ -71,6 +71,13 @@ class UserRow(Base):
     # PBKDF2 "salt$hash" of the player's 4-digit PIN. Nullable for rows
     # created before PINs existed (those simply can't log back in).
     pin_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # PBKDF2 hash of the one-time "rescue code" shown at signup, used to
+    # reset a forgotten PIN. Same nullable story as pin_hash.
+    recovery_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Brute-force lockout: consecutive failed login/reset attempts, and
+    # the moment the account unlocks again (null = not locked).
+    failed_attempts: Mapped[int] = mapped_column(Integer, default=0)
+    locked_until: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=_utcnow)
 
 

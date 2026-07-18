@@ -98,7 +98,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export function createUser(username: string, pin: string) {
-  return request<{ username: string; createdAt: string }>("/api/users", {
+  // recoveryCode is returned exactly once, at signup — show it to the
+  // player immediately; it can never be fetched again.
+  return request<{ username: string; createdAt: string; recoveryCode: string }>("/api/users", {
     method: "POST",
     body: JSON.stringify({ username, pin }),
   });
@@ -108,6 +110,13 @@ export function login(username: string, pin: string) {
   return request<{ username: string; createdAt: string }>("/api/users/login", {
     method: "POST",
     body: JSON.stringify({ username, pin }),
+  });
+}
+
+export function resetPin(username: string, recoveryCode: string, newPin: string) {
+  return request<{ username: string; createdAt: string }>("/api/users/reset-pin", {
+    method: "POST",
+    body: JSON.stringify({ username, recoveryCode, newPin }),
   });
 }
 

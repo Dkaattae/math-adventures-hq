@@ -15,9 +15,10 @@ def test_migrations_create_full_schema(tmp_path):
     assert {"users", "quizzes", "quiz_results", "leaderboard", "alembic_version"} <= tables
 
     # The pin_hash column that plain create_all wouldn't have added to an
-    # existing DB is present in the baseline migration.
+    # existing DB is present in the baseline migration, and 0002 adds the
+    # recovery/lockout columns.
     user_cols = {c["name"] for c in inspect(eng).get_columns("users")}
-    assert "pin_hash" in user_cols
+    assert {"pin_hash", "recovery_hash", "failed_attempts", "locked_until"} <= user_cols
 
     lb_indexes = {ix["name"] for ix in inspect(eng).get_indexes("leaderboard")}
     assert "ix_leaderboard_math_type" in lb_indexes

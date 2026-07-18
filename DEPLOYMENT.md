@@ -135,7 +135,9 @@ docker compose up -d --build   # app + local postgres, no Supabase needed
   Variables. `.env*` files are git-ignored.
 - **Password rotation:** if you rotate the Supabase DB password, update
   `DATABASE_URL` on Railway and redeploy.
-- **PINs are hashed** (PBKDF2) but recovery/rate-limiting aren't built yet
-  — see `PROJECT_PLAN.md` §2 before relying on them for anything sensitive.
+- **PINs are hashed** (PBKDF2), forgotten PINs are recoverable via the
+  one-time rescue code from signup, and 5 failed attempts lock an account
+  for 15 minutes. Username creation itself is still unthrottled — see
+  `PROJECT_PLAN.md` §2.
 - **Cold starts / free tier:** both platforms may sleep idle services on
   free tiers; the first request after idle can be slow.

@@ -38,7 +38,9 @@ leaderboard.
   server-side, and reported quiz time is clamped to the server-observed
   window.
 - **PIN accounts**: new players pick a 4-digit PIN (PBKDF2-hashed) and
-  returning players enter it to reclaim their name and scores.
+  returning players enter it to reclaim their name and scores. Signup
+  issues a one-time rescue code (e.g. `gold-otter-731`) for forgotten
+  PINs, and 5 failed attempts lock the account for 15 minutes.
 - **Progress view**: a "My Progress" screen shows totals, per-topic
   averages and bests, and recent quizzes.
 - **Visual geometry**: shape-identification questions render the shape as
