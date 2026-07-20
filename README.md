@@ -27,7 +27,8 @@ leaderboard.
 - **Adaptive difficulty**: at the end of a quiz the app suggests a next
   level (up when a kid aces it, down when they struggle) with a one-tap
   button, and returning players' setup screen pre-selects a level from
-  their recent history.
+  their recent history — per topic, so being great at addition doesn't
+  start fractions on hard.
 - **Timed quizzes**: 15 seconds per question, 3 minutes total, with
   flagging and a review panel for skipping around.
 - **Forgiving answer grading**: numeric answers are compared as numbers

@@ -154,16 +154,19 @@ export interface UserStats {
 export interface SuggestedLevel {
   grade: Grade;
   difficulty: Difficulty;
+  /** Recent quizzes behind the suggestion; 0 = topic never played. */
   basedOn: number;
+  mathType?: MathType | null;
 }
 
 export function getUserStats(username: string) {
   return request<UserStats>(`/api/users/${encodeURIComponent(username)}/stats`);
 }
 
-export function getSuggestedLevel(username: string) {
+export function getSuggestedLevel(username: string, mathType?: MathType) {
+  const qs = mathType ? `?${new URLSearchParams({ mathType })}` : "";
   return request<SuggestedLevel | null>(
-    `/api/users/${encodeURIComponent(username)}/suggested-level`,
+    `/api/users/${encodeURIComponent(username)}/suggested-level${qs}`,
   );
 }
 
