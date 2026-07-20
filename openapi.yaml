@@ -56,10 +56,10 @@ paths:
                 pin: { type: string, pattern: "^[0-9]{4}$", description: "4-digit numeric PIN" }
       responses:
         "201":
-          description: User created
+          description: User created. Includes the one-time rescue code — it is never returned again.
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/User" }
+              schema: { $ref: "#/components/schemas/UserCreated" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "409":
           description: Username already taken
@@ -88,7 +88,44 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/User" }
         "401":
-          description: Wrong username / PIN
+          description: Wrong username / PIN (counts toward the lockout)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429":
+          description: Locked after too many failed attempts (Retry-After header set)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /api/users/reset-pin:
+    post:
+      tags: [users]
+      summary: Set a new PIN using the rescue code from signup
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, recoveryCode, newPin]
+              properties:
+                username: { type: string, minLength: 1, maxLength: 20 }
+                recoveryCode: { type: string, example: "gold-otter-731" }
+                newPin: { type: string, pattern: "^[0-9]{4}$" }
+      responses:
+        "200":
+          description: PIN updated; player is logged in
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "401":
+          description: Wrong rescue code (counts toward the lockout)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429":
+          description: Locked after too many failed attempts (Retry-After header set)
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -264,6 +301,17 @@ components:
       properties:
         username:  { type: string }
         createdAt: { type: string, format: date-time }
+
+    UserCreated:
+      allOf:
+        - $ref: "#/components/schemas/User"
+        - type: object
+          required: [recoveryCode]
+          properties:
+            recoveryCode:
+              type: string
+              description: One-time rescue code for PIN resets. Shown only in this response.
+              example: "gold-otter-731"
 
     Question:
       type: object

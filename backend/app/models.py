@@ -56,6 +56,11 @@ class User(BaseModel):
     createdAt: datetime
 
 
+class UserCreated(User):
+    """Signup response: includes the one-time rescue code (never shown again)."""
+    recoveryCode: str
+
+
 class UserCreate(BaseModel):
     username: str = Field(min_length=1, max_length=20)
     pin: str = Field(pattern=r"^\d{4}$", description="4-digit numeric PIN")
@@ -64,6 +69,12 @@ class UserCreate(BaseModel):
 class UserLogin(BaseModel):
     username: str = Field(min_length=1, max_length=20)
     pin: str = Field(pattern=r"^\d{4}$")
+
+
+class PinReset(BaseModel):
+    username: str = Field(min_length=1, max_length=20)
+    recoveryCode: str = Field(min_length=1, max_length=40)
+    newPin: str = Field(pattern=r"^\d{4}$")
 
 
 class UsernameAvailability(BaseModel):

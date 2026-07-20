@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import secrets
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from uuid import UUID
 
@@ -92,11 +92,14 @@ def get_user_row(db: Session, username: str) -> Optional[UserRow]:
     return db.scalar(select(UserRow).where(UserRow.username_lower == username.lower()))
 
 
-def create_user(db: Session, username: str, pin: str | None = None) -> User:
+def create_user(
+    db: Session, username: str, pin: str | None = None, recovery_code: str | None = None
+) -> User:
     row = UserRow(
         username=username,
         username_lower=username.lower(),
         pin_hash=hash_pin(pin) if pin else None,
+        recovery_hash=hash_pin(_normalize_code(recovery_code)) if recovery_code else None,
         created_at=datetime.now(timezone.utc),
     )
     db.add(row)
@@ -105,10 +108,100 @@ def create_user(db: Session, username: str, pin: str | None = None) -> User:
     return User(username=row.username, createdAt=row.created_at)
 
 
+# ---------- rescue codes & brute-force lockout ----------
+
+# Kid-friendly one-time code shown at signup, e.g. "gold-otter-731".
+# 16 colors x 32 animals x 1000 numbers ≈ 512k combos; combined with the
+# failed-attempt lockout below, guessing is impractical.
+_CODE_COLORS = [
+    "red", "blue", "green", "gold", "pink", "teal", "plum", "mint",
+    "ruby", "jade", "coral", "amber", "ivory", "olive", "navy", "lime",
+]
+_CODE_ANIMALS = [
+    "tiger", "panda", "otter", "eagle", "fox", "bear", "wolf", "koala",
+    "zebra", "whale", "shark", "bunny", "gecko", "moose", "llama", "dino",
+    "robin", "crab", "seal", "puma", "lynx", "toad", "swan", "ibis",
+    "mole", "newt", "orca", "kiwi", "yak", "emu", "bat", "elk",
+]
+
+MAX_FAILED_ATTEMPTS = 5
+LOCKOUT_MINUTES = 15
+
+
+def generate_recovery_code() -> str:
+    return (
+        f"{secrets.choice(_CODE_COLORS)}-{secrets.choice(_CODE_ANIMALS)}"
+        f"-{secrets.randbelow(1000):03d}"
+    )
+
+
+def _normalize_code(code: str) -> str:
+    return code.strip().lower()
+
+
+class AccountLockedError(Exception):
+    """Too many failed login/reset attempts; retry after the given seconds."""
+
+    def __init__(self, retry_after_seconds: int):
+        self.retry_after_seconds = max(1, retry_after_seconds)
+        super().__init__(f"locked for {self.retry_after_seconds}s")
+
+
+def _check_lockout(db: Session, row: UserRow) -> None:
+    """Raise if the account is locked; clear an expired lock."""
+    if row.locked_until is None:
+        return
+    now = datetime.now(timezone.utc)
+    if now < row.locked_until:
+        raise AccountLockedError(int((row.locked_until - now).total_seconds()))
+    row.locked_until = None
+    row.failed_attempts = 0
+    db.commit()
+
+
+def _register_failure(db: Session, row: UserRow) -> None:
+    row.failed_attempts = (row.failed_attempts or 0) + 1
+    if row.failed_attempts >= MAX_FAILED_ATTEMPTS:
+        row.locked_until = datetime.now(timezone.utc) + timedelta(minutes=LOCKOUT_MINUTES)
+    db.commit()
+
+
+def _clear_failures(db: Session, row: UserRow) -> None:
+    if row.failed_attempts or row.locked_until:
+        row.failed_attempts = 0
+        row.locked_until = None
+        db.commit()
+
+
 def check_login(db: Session, username: str, pin: str) -> Optional[User]:
+    """Verify a login. Raises AccountLockedError while locked out."""
     row = get_user_row(db, username)
-    if row is None or not verify_pin(pin, row.pin_hash):
+    if row is None:
         return None
+    _check_lockout(db, row)
+    if not verify_pin(pin, row.pin_hash):
+        _register_failure(db, row)
+        return None
+    _clear_failures(db, row)
+    return User(username=row.username, createdAt=row.created_at)
+
+
+def reset_pin(db: Session, username: str, recovery_code: str, new_pin: str) -> Optional[User]:
+    """Set a new PIN if the rescue code matches.
+
+    Counts toward the same lockout as logins, so the rescue code can't be
+    brute-forced either. Raises AccountLockedError while locked out.
+    """
+    row = get_user_row(db, username)
+    if row is None:
+        return None
+    _check_lockout(db, row)
+    if not verify_pin(_normalize_code(recovery_code), row.recovery_hash):
+        _register_failure(db, row)
+        return None
+    row.pin_hash = hash_pin(new_pin)
+    _clear_failures(db, row)
+    db.commit()
     return User(username=row.username, createdAt=row.created_at)
 
 

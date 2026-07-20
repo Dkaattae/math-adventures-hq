@@ -24,25 +24,24 @@ Completed work moves to the **Done** section at the bottom.
 
 ## 2. Known bugs & issues
 
-From the 2026-07-15 audit. Items 2 (Alembic) and 4 (unified level logic)
-are now fixed — see Done. Remaining, ordered by impact:
+From the 2026-07-15 audit; items are struck off as they land (see Done).
+Remaining, ordered by impact:
 
-1. **No PIN recovery + no login rate-limiting.** A kid who forgets their
-   4-digit PIN is locked out of that name permanently, and `POST
-   /api/users/login` has no throttle, so a 4-digit PIN (10k combos) is
-   brute-forceable. Given the audience the stakes are low, but a
-   "forgot PIN?" path (even a soft reset) and basic rate-limiting are
-   worth it. Usernames are also still an open, unauthenticated namespace.
-2. **`suggest_level` ignores the topic.** The history-based level
+1. **`suggest_level` ignores the topic.** The history-based level
    suggestion looks at the most recent quiz's level regardless of
    subject, so a kid who's strong at addition but new to fractions gets
    the same suggested level for both. It should be per-topic. (Now that
    the ladder is centralized in `app/leveling.py`, this is a small change
    to which rows `suggest_level` averages over.)
-3. **Stats/suggested-level endpoints are unauthenticated.** Anyone can
+2. **Stats/suggested-level endpoints are unauthenticated.** Anyone can
    read any player's progress by guessing a username. Low severity for
    this app, but if PINs are meant to "own" a name, stats arguably
    should sit behind login too.
+3. **Usernames are an open namespace.** Creation is unauthenticated and
+   unthrottled, and the charset is unrestricted — someone could squat
+   names or fill the users table. Restrict to a sane charset and add a
+   creation rate limit. (Login/reset brute-forcing is now covered by the
+   per-account lockout.)
 
 ---
 
@@ -110,14 +109,28 @@ are now fixed — see Done. Remaining, ordered by impact:
 
 | Phase | Items | Why first |
 |---|---|---|
-| 1 — hardening | PIN recovery + login rate-limit (§2.1); stats behind login (§2.3) | Remaining security/robustness gaps from the accounts work |
-| 2 — polish | Per-topic level suggestion (§2.2); worksheet export; practice vs. challenge mode; more visual questions | Additive product depth on a solid base |
+| 1 — hardening | Username namespace (§2.3); stats behind login (§2.2) | Remaining security/robustness gaps from the accounts work |
+| 2 — polish | Per-topic level suggestion (§2.1); worksheet export; practice vs. challenge mode; more visual questions | Additive product depth on a solid base |
 
 ---
 
 ## Done
 
 Completed items, newest first.
+
+### 2026-07-16 — PIN recovery + login lockout (was §2.1)
+
+- **Rescue codes.** Signup now issues a one-time, kid-friendly rescue
+  code (e.g. `gold-otter-731`, ~512k combos) shown once on an
+  interstitial ("write it down!"); only its PBKDF2 hash is stored.
+  `POST /api/users/reset-pin` sets a new PIN when the code matches, and
+  the login screen gained a "Forgot your PIN?" flow.
+- **Brute-force lockout.** 5 consecutive failed login *or* reset
+  attempts lock the account for 15 minutes (DB-backed:
+  `users.failed_attempts` / `users.locked_until`, migration `0002` —
+  the first real proof of the Alembic workflow). Locked attempts get a
+  429 with `Retry-After` and a friendly message; a successful login
+  clears the counter.
 
 ### 2026-07-15 — Alembic, unified level logic, deploy guide
 
