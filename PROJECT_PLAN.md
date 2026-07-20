@@ -1,6 +1,6 @@
 # Math Adventures HQ — Project Plan
 
-_Last updated: 2026-07-18_
+_Last updated: 2026-07-19_
 
 This document collects the roadmap for expanding the quiz, the known bugs
 and rough edges found while auditing the codebase, the testing gaps, and
@@ -42,77 +42,33 @@ Remaining, ordered by impact:
 ## 3. UI & UX findings (2026-07-18 review)
 
 A front-end-focused pass, prompted by "the quiz has too many buttons and
-I'm not sure what to click." Ordered by impact.
+I'm not sure what to click." The two sharpest items — the quiz controls
+redesign (was §3.1) and the failed-submit retry — are implemented; see
+Done (2026-07-19). Remaining findings, ordered by impact:
 
-### 3.1 The quiz screen's interaction model — decision
-
-Verified current behavior: the quiz already IS a **review-before-submit**
-model. "Submit Answer" only saves locally (nothing reaches the server
-until "Finish ✅"), the 📋 Review panel jumps back to any question, and a
-revisited answer is pre-filled and editable. The confusion is that the
-controls don't communicate this model:
-
-- **"Submit Answer" sounds final but isn't** — and it sits next to
-  "Finish ✅", so there are two submit-sounding buttons doing very
-  different things.
-- **"Next ➡️" silently discards typed input** (`goNext` doesn't save;
-  navigation resets the field). Inconsistent with timer expiry, which
-  *does* salvage the draft.
-- **There is no Back button** — going back requires discovering the
-  collapsed Review panel.
-- **"Finish ✅" is always visible with no confirmation** — one tap on
-  question 2 ends the quiz with 8 blanks.
-- Five buttons total (four in multiple-choice) for what is really a
-  two-action screen.
-
-**Decision: keep the review-before-submit model** (it matches the
-server's grade-once-at-submit anti-cheat design and the kid-friendly
-"go back and fix it" behavior) and redesign the controls to express it:
-
-- **← Back / Next →** as the only two persistent buttons; *both* save
-  the typed draft before navigating (kills the silent-discard bug and
-  the misleading "Submit Answer" label in one move).
-- Replace the position-only progress bar, the Flag button, and the
-  hidden Review toggle with one **always-visible strip of 10 tappable
-  dots** — filled = answered, ring = current. Tap to jump. (Flags add
-  nothing once blanks are permanently visible on a 10-question quiz.)
-- **Finish becomes contextual**: primary button after question 10 (or
-  once all dots are filled); before that, finishing early asks
-  "You still have N blank questions — go back, or finish anyway?".
-- Multiple-choice keeps tap-to-save-and-advance; same nav strip.
-
-Net result: 2 buttons + dots + a contextual Finish, one honest model.
-
-### 3.2 Other findings
-
-1. **A failed submit throws away the whole quiz.** If `POST
-   /quizzes/{id}/submit` fails (network blip), the error screen only
-   offers "Back Home" — 10 answers and 3 minutes of work gone. Keep the
-   answers in state and offer "Try again" (the quiz is unsubmitted
-   server-side, so a retry is safe).
-2. **Total-time expiry is a silent rug-pull.** At 0:00 the quiz submits
+1. **Total-time expiry is a silent rug-pull.** At 0:00 the quiz submits
    itself with no warning. Turn the total timer red/pulsing for the
    last 30 seconds so the auto-submit isn't a surprise.
-3. **Mobile keyboard is wrong for most answers.** The answer input is
+2. **Mobile keyboard is wrong for most answers.** The answer input is
    `type="text"` with no `inputMode`, so phones show a full keyboard
    for "7 + 5". Most topics are numeric; fractions ("3/4"), comparison
    ("<"), and word answers are not. Backend could tag each question
    with an expected answer kind so the client can pick
    `inputMode="numeric"` vs text.
-4. **Setup screen's Start button materializes from nothing.** It only
+3. **Setup screen's Start button materializes from nothing.** It only
    renders once grade+topic+difficulty are all chosen; before that
    there's no hint anything is missing. Always show it, disabled, with
    a "pick a grade / topic / difficulty" nudge.
-5. **Leaderboard rows hide their context.** Unfiltered, a "10/10 —
+4. **Leaderboard rows hide their context.** Unfiltered, a "10/10 —
    1m 20s" row doesn't say it was K-easy vs G5-hard. Add small
    grade/topic chips per row.
-6. **Rescue-code interstitial has no copy button.** A parent can't tap
+5. **Rescue-code interstitial has no copy button.** A parent can't tap
    to copy `gold-otter-731` into their notes app.
-7. **Accessibility pass needed.** State is color-only in several places
-   (green = answered on review dots, red pulse on the timer); buttons
-   lean on emoji; the dots need aria-labels ("Question 3, answered").
-   Also worth a once-over with keyboard-only navigation.
-8. **No way out of a quiz.** Once started, the only exits are Finish
+6. **Accessibility pass needed.** State is color-only in several places
+   (the red pulse on the timer); buttons lean on emoji. The new dot
+   strip ships with aria-labels, but the rest of the app deserves a
+   keyboard-only + screen-reader once-over.
+7. **No way out of a quiz.** Once started, the only exits are Finish
    (which submits) or waiting out the clock. Consider a small "quit"
    with confirmation that discards the attempt.
 
@@ -140,9 +96,10 @@ Net result: 2 buttons + dots + a contextual Finish, one honest model.
 
 ### Frontend
 
-- **More component tests** — QuizScreen timers/MC, UsernameScreen PIN
-  flow, Leaderboard filters, ProgressScreen, and ShapeFigure are covered
-  now; still missing: flag/review panel navigation and the ResultsScreen
+- **More component tests** — QuizScreen timers/MC/navigation (dot strip,
+  draft-saving Back/Next, blank-check confirm), UsernameScreen PIN flow,
+  Index submit-retry, Leaderboard filters, ProgressScreen, and
+  ShapeFigure are covered now; still missing: ResultsScreen
   recommendation/figure rendering from a `QuizResult` fixture.
 - **Flow-level test with a mocked API** (MSW): username → setup → quiz →
   results against canned responses.
@@ -182,15 +139,32 @@ Net result: 2 buttons + dots + a contextual Finish, one honest model.
 
 | Phase | Items | Why first |
 |---|---|---|
-| 1 — UI cleanup | Quiz controls redesign (§3.1); failed-submit retry (§3.2.1); time-warning (§3.2.2) | Directly answers real confusion in the core play loop |
-| 2 — hardening | Username namespace (§2.2); stats behind login (§2.1) | Remaining security/robustness gaps from the accounts work |
-| 3 — polish | Rest of §3.2 (mobile keyboard, setup nudge, leaderboard chips, copy button, a11y); worksheet export; practice vs. challenge mode; more visual questions | Additive depth on a solid base |
+| 1 — hardening | Username namespace (§2.2); stats behind login (§2.1) | Remaining security/robustness gaps from the accounts work |
+| 2 — polish | Rest of §3 (time-warning, mobile keyboard, setup nudge, leaderboard chips, copy button, a11y, quiz quit); worksheet export; practice vs. challenge mode; more visual questions | Additive depth on a solid base |
 
 ---
 
 ## Done
 
 Completed items, newest first.
+
+### 2026-07-19 — quiz controls redesign + failed-submit retry (was §3.1, §3.2.1)
+
+- **Quiz controls now express the review-before-submit model.** Five
+  buttons became two: ← Back / Next → both save the typed draft (killing
+  the silent-discard-on-Next bug and the misleading "Submit Answer"
+  label). An always-visible strip of 10 tappable, aria-labeled dots
+  (filled = answered, ring = current) replaces the progress bar, the
+  Flag button, and the hidden Review panel. Finish only appears on the
+  last question or once everything is answered, and finishing with
+  blanks asks "You still have N blank questions!" with a "Keep going"
+  that jumps to the first blank; the live draft counts as answered in
+  the check. Multiple-choice keeps tap-to-save-and-advance.
+- **A failed submit no longer loses the quiz.** The answers stay in
+  state and the error screen offers "🔄 Try again", resubmitting the
+  identical payload (safe — the quiz is unsubmitted server-side). An
+  `already_submitted` 409 gets a no-retry message instead of a loop,
+  and starting a new quiz clears any stale pending submission.
 
 ### 2026-07-18 — per-topic level suggestions
 

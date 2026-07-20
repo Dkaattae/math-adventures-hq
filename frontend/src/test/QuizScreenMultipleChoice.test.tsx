@@ -32,10 +32,9 @@ describe("QuizScreen multiple-choice mode", () => {
     vi.useRealTimers();
   });
 
-  it("renders option buttons and no text input or Submit button", () => {
+  it("renders option buttons and no text input", () => {
     render(<QuizScreen questions={mcQuestions} onFinish={vi.fn()} />);
     expect(screen.queryByPlaceholderText("Your answer...")).toBeNull();
-    expect(screen.queryByText("Submit Answer")).toBeNull();
     expect(screen.getByRole("button", { name: "0a" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "0d" })).toBeInTheDocument();
   });
@@ -50,14 +49,21 @@ describe("QuizScreen multiple-choice mode", () => {
     expect(screen.getByText("Question 2 of 10")).toBeInTheDocument();
   });
 
-  it("submits the chosen options when finishing", async () => {
+  it("finishing early warns about blanks, then submits on Finish anyway", async () => {
     const onFinish = vi.fn();
     render(<QuizScreen questions={mcQuestions} onFinish={onFinish} />);
 
     fireEvent.click(screen.getByRole("button", { name: "0c" }));
     await act(() => vi.advanceTimersByTimeAsync(500));
+    // Jump to the last question — Finish only shows there (or when done).
+    fireEvent.click(screen.getByRole("button", { name: /Question 10, blank/ }));
     fireEvent.click(screen.getByText("Finish ✅"));
 
+    // Only Q1 is answered, so 9 blanks remain.
+    expect(screen.getByText(/still have 9 blank questions/)).toBeInTheDocument();
+    expect(onFinish).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByText("Finish anyway ✅"));
     expect(onFinish).toHaveBeenCalledTimes(1);
     const [answers] = onFinish.mock.calls[0];
     expect(answers[0]).toBe("0c");

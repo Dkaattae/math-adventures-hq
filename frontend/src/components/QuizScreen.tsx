@@ -11,17 +11,21 @@ interface Props {
 const QUESTION_TIME = 15;
 const TOTAL_TIME = 180;
 
+// Interaction model (PROJECT_PLAN §3.1): review-before-submit. Answers
+// only save locally until Finish; Back/Next both keep the typed draft;
+// the always-visible dot strip shows blanks and jumps anywhere; Finish
+// appears on the last question (or once everything's answered) and warns
+// when blanks remain.
 const QuizScreen = ({ questions, onFinish }: Props) => {
   const [current, setCurrent] = useState(0);
   const [answers, setAnswers] = useState<(string | null)[]>(Array(10).fill(null));
   const [inputVal, setInputVal] = useState("");
   const [questionTimer, setQuestionTimer] = useState(QUESTION_TIME);
   const [totalTimer, setTotalTimer] = useState(TOTAL_TIME);
-  const [flagged, setFlagged] = useState<Set<number>>(new Set());
-  const [reviewing, setReviewing] = useState(false);
+  const [confirmingFinish, setConfirmingFinish] = useState(false);
   // The backend never sends the correct answer before the quiz is
   // submitted (anti-cheat), so this is just a "your answer was saved"
-  // pulse rather than a correct/wrong indicator.
+  // pulse (multiple-choice taps), not a correct/wrong indicator.
   const [feedback, setFeedback] = useState<"saved" | null>(null);
 
   // Countdowns are computed from fixed deadline timestamps, not by
@@ -43,7 +47,7 @@ const QuizScreen = ({ questions, onFinish }: Props) => {
     finished.current = true;
     const { answers, inputVal, current } = latest.current;
     const finalAnswers = [...answers];
-    if (inputVal.trim() && finalAnswers[current] === null) {
+    if (inputVal.trim()) {
       finalAnswers[current] = inputVal.trim();
     }
     const secondsLeft = Math.max(0, Math.ceil((totalDeadline.current - Date.now()) / 1000));
@@ -87,19 +91,41 @@ const QuizScreen = ({ questions, onFinish }: Props) => {
   }, [finish]);
 
   // Fresh 15 seconds whenever the player lands on a question, including
-  // manual Next/Review navigation.
+  // Back/Next and dot-strip navigation; also drop any pending confirm.
   useEffect(() => {
     questionDeadline.current = Date.now() + QUESTION_TIME * 1000;
     setQuestionTimer(QUESTION_TIME);
+    setConfirmingFinish(false);
   }, [current]);
 
   useEffect(() => {
     setInputVal(answers[current] ?? "");
   }, [current, answers]);
 
-  const recordAndAdvance = (value: string) => {
+  /** Keep the typed draft (non-empty) when leaving a question. */
+  const saveDraft = () => {
+    const value = inputVal.trim();
+    if (!value || answers[current] === value) return;
+    setAnswers((prev) => {
+      const next = [...prev];
+      next[current] = value;
+      return next;
+    });
+  };
+
+  const goTo = (index: number) => {
+    if (index === current || index < 0 || index > 9) return;
+    saveDraft();
+    setCurrent(index);
+  };
+
+  const goBack = () => goTo(current - 1);
+  const goNext = () => goTo(current + 1);
+
+  // Multiple choice: tapping an option saves it and moves on.
+  const chooseOption = (option: string) => {
     const newAnswers = [...answers];
-    newAnswers[current] = value;
+    newAnswers[current] = option;
     setAnswers(newAnswers);
 
     setFeedback("saved");
@@ -109,26 +135,31 @@ const QuizScreen = ({ questions, onFinish }: Props) => {
     }, 400);
   };
 
-  const submitAnswer = () => {
-    if (!inputVal.trim()) return;
-    recordAndAdvance(inputVal.trim());
+  // Blank count as it would stand if we finished right now (the current
+  // draft counts as answered).
+  const draft = inputVal.trim();
+  const effectiveAnswers = answers.map((a, i) => (i === current && draft ? draft : a));
+  const blanks = effectiveAnswers.filter((a) => !a).length;
+  const allAnswered = blanks === 0;
+  const showFinish = current === 9 || allAnswered;
+
+  const requestFinish = () => {
+    if (allAnswered) {
+      finish();
+      return;
+    }
+    saveDraft();
+    setConfirmingFinish(true);
   };
 
-  const chooseOption = (option: string) => recordAndAdvance(option);
-
-  const goNext = () => {
-    if (current < 9) setCurrent(current + 1);
-  };
-
-  const toggleFlag = () => {
-    const f = new Set(flagged);
-    if (f.has(current)) f.delete(current); else f.add(current);
-    setFlagged(f);
+  const goToFirstBlank = () => {
+    setConfirmingFinish(false);
+    const firstBlank = effectiveAnswers.findIndex((a) => !a);
+    if (firstBlank !== -1) goTo(firstBlank);
   };
 
   const totalMins = Math.floor(totalTimer / 60);
   const totalSecs = totalTimer % 60;
-  const progress = ((current + 1) / 10) * 100;
   const qTimerUrgent = questionTimer <= 5;
   const options = questions[current].options;
   const isMultipleChoice = Array.isArray(options) && options.length > 0;
@@ -145,13 +176,27 @@ const QuizScreen = ({ questions, onFinish }: Props) => {
         </div>
       </div>
 
-      {/* Progress */}
-      <div className="w-full h-3 bg-muted rounded-full mb-6 overflow-hidden">
-        <motion.div
-          className="h-full bg-primary rounded-full"
-          animate={{ width: `${progress}%` }}
-          transition={{ duration: 0.3 }}
-        />
+      {/* Question dots: progress, review, and navigation in one strip */}
+      <div className="flex justify-center gap-1.5 flex-wrap mb-6" role="group" aria-label="Quiz questions">
+        {questions.map((_, i) => {
+          const answered = Boolean(effectiveAnswers[i]);
+          const isCurrent = i === current;
+          return (
+            <button
+              key={i}
+              onClick={() => goTo(i)}
+              aria-label={`Question ${i + 1}, ${answered ? "answered" : "blank"}${isCurrent ? ", current" : ""}`}
+              aria-current={isCurrent ? "step" : undefined}
+              className={`w-8 h-8 rounded-full text-xs font-heading font-bold border-2 transition-all ${
+                answered
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "bg-card border-border text-muted-foreground"
+              } ${isCurrent ? "ring-2 ring-primary/50 scale-110" : "hover:border-primary/40"}`}
+            >
+              {i + 1}
+            </button>
+          );
+        })}
       </div>
 
       {/* Question */}
@@ -205,7 +250,7 @@ const QuizScreen = ({ questions, onFinish }: Props) => {
                 type="text"
                 value={inputVal}
                 onChange={(e) => setInputVal(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && submitAnswer()}
+                onKeyDown={(e) => e.key === "Enter" && (current < 9 ? goNext() : requestFinish())}
                 placeholder="Your answer..."
                 className="w-full px-5 py-4 text-xl text-center rounded-2xl border-2 border-border bg-card font-heading focus:outline-none focus:border-primary focus:ring-2 focus:ring-ring/30 transition-all"
                 autoFocus
@@ -225,45 +270,36 @@ const QuizScreen = ({ questions, onFinish }: Props) => {
         )}
       </div>
 
-      {/* Controls */}
+      {/* Controls: Back / Next, plus Finish when it makes sense */}
       <div className="flex flex-wrap gap-3 justify-center mt-6">
-        {!isMultipleChoice && (
-          <QuizButton onClick={submitAnswer} primary>Submit Answer</QuizButton>
+        {current > 0 && <QuizButton onClick={goBack}>← Back</QuizButton>}
+        {current < 9 && (
+          <QuizButton onClick={goNext} primary={!isMultipleChoice && !showFinish}>
+            Next →
+          </QuizButton>
         )}
-        <QuizButton onClick={goNext}>Next ➡️</QuizButton>
-        <QuizButton onClick={toggleFlag}>
-          {flagged.has(current) ? "🚩 Unflag" : "🏳️ Flag"}
-        </QuizButton>
-        <QuizButton onClick={() => setReviewing(!reviewing)}>
-          📋 Review
-        </QuizButton>
-        <QuizButton onClick={finish} danger>Finish ✅</QuizButton>
+        {showFinish && (
+          <QuizButton onClick={requestFinish} primary>
+            Finish ✅
+          </QuizButton>
+        )}
       </div>
 
-      {/* Review panel */}
+      {/* Blank-question check before finishing early */}
       <AnimatePresence>
-        {reviewing && (
+        {confirmingFinish && (
           <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            className="overflow-hidden mt-4"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 10 }}
+            className="mt-4 mx-auto max-w-md p-4 rounded-2xl border-2 border-secondary/60 bg-secondary/10 text-center space-y-3"
           >
-            <div className="grid grid-cols-5 gap-2 max-w-xs mx-auto">
-              {questions.map((_, i) => (
-                <button
-                  key={i}
-                  onClick={() => { setCurrent(i); setReviewing(false); }}
-                  className={`p-2 rounded-xl font-heading font-bold text-sm transition-all border-2 ${
-                    i === current ? "border-primary bg-primary text-primary-foreground" :
-                    answers[i] ? "border-success bg-success/10" :
-                    flagged.has(i) ? "border-secondary bg-secondary/20" :
-                    "border-border bg-card"
-                  }`}
-                >
-                  {i + 1}
-                </button>
-              ))}
+            <p className="font-heading font-semibold">
+              🤔 You still have {blanks} blank question{blanks === 1 ? "" : "s"}!
+            </p>
+            <div className="flex flex-wrap gap-3 justify-center">
+              <QuizButton onClick={goToFirstBlank} primary>Keep going 💪</QuizButton>
+              <QuizButton onClick={finish}>Finish anyway ✅</QuizButton>
             </div>
           </motion.div>
         )}
@@ -272,8 +308,8 @@ const QuizScreen = ({ questions, onFinish }: Props) => {
   );
 };
 
-const QuizButton = ({ children, onClick, primary, danger }: {
-  children: React.ReactNode; onClick: () => void; primary?: boolean; danger?: boolean;
+const QuizButton = ({ children, onClick, primary }: {
+  children: React.ReactNode; onClick: () => void; primary?: boolean;
 }) => (
   <motion.button
     whileHover={{ scale: 1.05 }}
@@ -281,7 +317,6 @@ const QuizButton = ({ children, onClick, primary, danger }: {
     onClick={onClick}
     className={`px-5 py-3 rounded-xl font-heading font-semibold text-sm transition-all ${
       primary ? "bg-primary text-primary-foreground shadow-md" :
-      danger ? "bg-destructive text-destructive-foreground" :
       "bg-card border-2 border-border hover:border-primary/40"
     }`}
   >

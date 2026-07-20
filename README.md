@@ -29,8 +29,9 @@ leaderboard.
   button, and returning players' setup screen pre-selects a level from
   their recent history — per topic, so being great at addition doesn't
   start fractions on hard.
-- **Timed quizzes**: 15 seconds per question, 3 minutes total, with
-  flagging and a review panel for skipping around.
+- **Timed quizzes**: 15 seconds per question, 3 minutes total. A tappable
+  dot strip shows which questions are answered and jumps anywhere; Back
+  and Next keep your typed answer, and finishing with blanks asks first.
 - **Forgiving answer grading**: numeric answers are compared as numbers
   (`0.50` counts for `0.5`), fractions require simplest form by design,
   word answers are case-insensitive.

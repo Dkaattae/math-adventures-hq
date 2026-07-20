@@ -65,22 +65,20 @@ describe("QuizScreen timers", () => {
 
     const input = screen.getByPlaceholderText("Your answer...");
     fireEvent.change(input, { target: { value: "42" } });
-    // Let question 1 time out, then finish the quiz immediately.
+    // Let question 1 time out, then go back — the draft was salvaged.
     await act(() => vi.advanceTimersByTimeAsync(15_500));
-    fireEvent.click(screen.getByText("Finish ✅"));
+    expect(screen.getByText("Question 2 of 10")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("← Back"));
 
-    expect(onFinish).toHaveBeenCalledTimes(1);
-    const [answers] = onFinish.mock.calls[0];
-    expect(answers[0]).toBe("42");
+    expect((screen.getByPlaceholderText("Your answer...") as HTMLInputElement).value).toBe("42");
   });
 
   it("finishes the quiz when the timer expires on the last question", async () => {
     const onFinish = vi.fn();
     render(<QuizScreen questions={questions} onFinish={onFinish} />);
 
-    // Jump to the last question via the review panel.
-    fireEvent.click(screen.getByText("📋 Review"));
-    fireEvent.click(screen.getByRole("button", { name: "10" }));
+    // Jump to the last question via the dot strip.
+    fireEvent.click(screen.getByRole("button", { name: /Question 10, blank/ }));
     expect(screen.getByText("Question 10 of 10")).toBeInTheDocument();
 
     fireEvent.change(screen.getByPlaceholderText("Your answer..."), { target: { value: "7" } });
