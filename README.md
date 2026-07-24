@@ -42,7 +42,12 @@ leaderboard.
 - **PIN accounts**: new players pick a 4-digit PIN (PBKDF2-hashed) and
   returning players enter it to reclaim their name and scores. Signup
   issues a one-time rescue code (e.g. `gold-otter-731`) for forgotten
-  PINs, and 5 failed attempts lock the account for 15 minutes.
+  PINs, and 5 failed attempts lock the account for 15 minutes. Names are
+  limited to letters, digits, spaces, `-`, `_` and `'`, and signups are
+  rate-limited per client so the namespace can't be squatted.
+- **Private progress**: logging in issues a 30-day session token, and a
+  player's own history (progress + suggested level) is only readable with
+  it. The leaderboard stays public.
 - **Progress view**: a "My Progress" screen shows totals, per-topic
   averages and bests, and recent quizzes.
 - **Visual geometry**: shape-identification questions render the shape as
@@ -159,11 +164,14 @@ The backend reads a single env var:
 
 | Var | Default | Notes |
 |---|---|---|
-| `DATABASE_URL` | `postgresql+psycopg://math:math@localhost:5432/math_adventures` | SQLAlchemy URL. **Must use the `postgresql+psycopg://` scheme**, not the bare `postgresql://` — we use psycopg v3. |
+| `DATABASE_URL` | `postgresql+psycopg://math:math@localhost:5432/math_adventures` | SQLAlchemy URL. A bare `postgresql://` (or Supabase's `postgres://`) is rewritten to the psycopg v3 driver automatically. |
 | `FRONTEND_DIST` | `/app/frontend_dist` | Where main.py looks for the built SPA; set by the Dockerfile. Leave unset in dev. |
+| `SKIP_MIGRATIONS` | unset | Set to `1` to skip `alembic upgrade head` at startup. |
+| `SIGNUP_RATE_LIMIT` | `10` | Max signups per client per window. `0` disables the limit — raise it for a classroom behind one IP. |
+| `SIGNUP_RATE_WINDOW_SECONDS` | `3600` | Window the signup limit is measured over. |
 
-No other secrets. The dev-only Postgres password in `docker-compose.yml`
-is safe to commit because the service isn't exposed.
+No secrets required. The dev-only Postgres password in
+`docker-compose.yml` is safe to commit because the service isn't exposed.
 
 ## Deploying to the cloud
 

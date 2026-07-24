@@ -5,7 +5,9 @@ import QuizScreen from "@/components/QuizScreen";
 import ResultsScreen from "@/components/ResultsScreen";
 import ProgressScreen from "@/components/ProgressScreen";
 import type { MathType, Difficulty, Grade, AnswerMode } from "@/data/quizConfig";
-import { ApiError, createQuiz, submitQuiz, type Question, type QuizResult } from "@/lib/api";
+import {
+  ApiError, createQuiz, setAuthToken, submitQuiz, type Question, type QuizResult,
+} from "@/lib/api";
 
 type Screen = "username" | "setup" | "quiz" | "results" | "progress" | "error";
 
@@ -23,6 +25,14 @@ const Index = () => {
   const handleUsername = (name: string) => {
     setUsername(name);
     setScreen("setup");
+  };
+
+  // Back to the login screen = log out: the next kid at this computer
+  // shouldn't inherit the last one's session.
+  const handleHome = () => {
+    setAuthToken(null);
+    setUsername("");
+    setScreen("username");
   };
 
   const startQuiz = async (
@@ -108,7 +118,7 @@ const Index = () => {
           level={config ? { grade: config.grade, difficulty: config.difficulty } : undefined}
           onTryLevel={handleTryLevel}
           onRedo={handleRedo}
-          onHome={() => setScreen("username")}
+          onHome={handleHome}
         />
       )}
       {screen === "error" && (
@@ -125,7 +135,7 @@ const Index = () => {
               </button>
             )}
             <button
-              onClick={() => setScreen("username")}
+              onClick={handleHome}
               className="px-6 py-3 rounded-2xl bg-card border-2 border-border font-heading font-bold"
             >
               🏠 Back Home

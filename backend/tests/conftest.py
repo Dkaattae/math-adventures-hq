@@ -8,6 +8,16 @@ from app.db import Base, get_session
 from app.main import app
 
 
+@pytest.fixture(autouse=True)
+def reset_rate_limits():
+    """The signup limiter is process-global; keep tests independent."""
+    from app.ratelimit import signup_limiter
+
+    signup_limiter.reset()
+    yield
+    signup_limiter.reset()
+
+
 @pytest.fixture
 def engine():
     eng = create_engine(
@@ -49,3 +59,20 @@ def client(engine):
         yield TestClient(app)
     finally:
         app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def signup():
+    """Create a player and return `Authorization` headers for them.
+
+    Signing up twice with the same name is a no-op that still yields
+    working headers, so tests can call this freely.
+    """
+
+    def _signup(client, username: str, pin: str = "1234") -> dict[str, str]:
+        r = client.post("/api/users", json={"username": username, "pin": pin})
+        if r.status_code == 409:
+            r = client.post("/api/users/login", json={"username": username, "pin": pin})
+        return {"Authorization": f"Bearer {r.json()['token']}"}
+
+    return _signup

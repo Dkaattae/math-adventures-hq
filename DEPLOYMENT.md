@@ -52,9 +52,15 @@ Keep this connection string handy — it becomes `DATABASE_URL` on Railway.
 
    That's the only required variable. Optional ones:
 
-   | Variable          | When to set it                                        |
-   |-------------------|-------------------------------------------------------|
-   | `SKIP_MIGRATIONS` | `1` to skip auto-migrations at startup (see §4)       |
+   | Variable                     | When to set it                                                                  |
+   |------------------------------|---------------------------------------------------------------------------------|
+   | `SKIP_MIGRATIONS`            | `1` to skip auto-migrations at startup (see §4)                                  |
+   | `SIGNUP_RATE_LIMIT`          | Signups allowed per client IP per window (default `10`; `0` turns the limit off) |
+   | `SIGNUP_RATE_WINDOW_SECONDS` | Window for that limit (default `3600`)                                           |
+
+   Raise `SIGNUP_RATE_LIMIT` if a whole classroom will sign up from one
+   shared IP — the counter is per process, so it also multiplies if you
+   ever run more than one replica.
 
 3. **Networking:** open **Settings → Networking → Generate Domain**.
    Railway sets a `PORT` env var and the container binds to it

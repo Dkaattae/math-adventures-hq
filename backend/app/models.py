@@ -3,10 +3,10 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
-from typing import Optional, Union
+from typing import Annotated, Optional, Union
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StringConstraints
 
 
 # ---------- enums ----------
@@ -51,28 +51,48 @@ class AnswerMode(str, Enum):
 
 # ---------- users ----------
 
+# Usernames are a shared, unauthenticated namespace, so keep the charset
+# boring: a letter/digit first, then letters, digits, spaces, hyphens,
+# underscores or apostrophes ("Anna-Lee", "O'Neil", "kid_7" all pass).
+# \w is Unicode-aware, so non-English names work; control characters,
+# markup and emoji do not.
+USERNAME_PATTERN = r"^[^\W_][\w \-']*$"
+
+Username = Annotated[
+    str,
+    StringConstraints(
+        strip_whitespace=True, min_length=1, max_length=20, pattern=USERNAME_PATTERN
+    ),
+]
+
+
 class User(BaseModel):
     username: str
     createdAt: datetime
 
 
-class UserCreated(User):
+class AuthenticatedUser(User):
+    """Signup/login response: carries the session token for /stats etc."""
+    token: str
+
+
+class UserCreated(AuthenticatedUser):
     """Signup response: includes the one-time rescue code (never shown again)."""
     recoveryCode: str
 
 
 class UserCreate(BaseModel):
-    username: str = Field(min_length=1, max_length=20)
+    username: Username
     pin: str = Field(pattern=r"^\d{4}$", description="4-digit numeric PIN")
 
 
 class UserLogin(BaseModel):
-    username: str = Field(min_length=1, max_length=20)
+    username: Username
     pin: str = Field(pattern=r"^\d{4}$")
 
 
 class PinReset(BaseModel):
-    username: str = Field(min_length=1, max_length=20)
+    username: Username
     recoveryCode: str = Field(min_length=1, max_length=40)
     newPin: str = Field(pattern=r"^\d{4}$")
 
@@ -112,7 +132,7 @@ class QuestionResult(BaseModel):
 
 
 class QuizCreate(BaseModel):
-    username: str
+    username: Username
     grade: Grade
     mathType: MathType
     difficulty: Difficulty
