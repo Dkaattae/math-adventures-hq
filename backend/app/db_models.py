@@ -81,6 +81,23 @@ class UserRow(Base):
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=_utcnow)
 
 
+class SessionRow(Base):
+    """A logged-in player's bearer token (stored only as a SHA-256 hash).
+
+    Tokens are 256-bit random values, so a fast hash is enough here — the
+    slow PBKDF2 in storage.hash_pin exists for guessable secrets (PINs,
+    rescue codes), not for these.
+    """
+
+    __tablename__ = "sessions"
+    token_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    username: Mapped[str] = mapped_column(
+        String(20), ForeignKey("users.username"), index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=_utcnow)
+    expires_at: Mapped[datetime] = mapped_column(UTCDateTime())
+
+
 class QuizRow(Base):
     __tablename__ = "quizzes"
     id: Mapped[UUID] = mapped_column(GUID(), primary_key=True, default=uuid4)

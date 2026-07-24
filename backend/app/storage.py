@@ -11,7 +11,7 @@ from uuid import UUID
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from .db_models import LeaderboardRow, QuizResultRow, QuizRow, UserRow
+from .db_models import LeaderboardRow, QuizResultRow, QuizRow, SessionRow, UserRow
 from .leveling import next_level
 from .models import (
     Difficulty,
@@ -32,6 +32,9 @@ __all__ = [
     "format_time",
     "user_exists",
     "create_user",
+    "create_session",
+    "session_username",
+    "revoke_sessions",
     "save_quiz",
     "get_quiz",
     "quiz_questions",
@@ -106,6 +109,53 @@ def create_user(
     db.commit()
     db.refresh(row)
     return User(username=row.username, createdAt=row.created_at)
+
+
+# ---------- sessions ----------
+
+SESSION_TTL_DAYS = 30
+
+
+def _hash_token(token: str) -> str:
+    """Plain SHA-256: session tokens are 256 bits of randomness, so
+    there's nothing to brute-force and no need for a slow KDF."""
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+def create_session(db: Session, username: str) -> str:
+    """Start a session and return the token (stored only as a hash)."""
+    token = secrets.token_urlsafe(32)
+    now = datetime.now(timezone.utc)
+    db.add(
+        SessionRow(
+            token_hash=_hash_token(token),
+            username=username,
+            created_at=now,
+            expires_at=now + timedelta(days=SESSION_TTL_DAYS),
+        )
+    )
+    db.commit()
+    return token
+
+
+def session_username(db: Session, token: str) -> Optional[str]:
+    """The account a token belongs to, or None if unknown/expired."""
+    row = db.get(SessionRow, _hash_token(token))
+    if row is None:
+        return None
+    if row.expires_at <= datetime.now(timezone.utc):
+        db.delete(row)
+        db.commit()
+        return None
+    return row.username
+
+
+def revoke_sessions(db: Session, username: str) -> None:
+    """Drop every session for an account (used when the PIN changes)."""
+    db.query(SessionRow).filter(
+        func.lower(SessionRow.username) == username.lower()
+    ).delete(synchronize_session=False)
+    db.commit()
 
 
 # ---------- rescue codes & brute-force lockout ----------
@@ -202,6 +252,9 @@ def reset_pin(db: Session, username: str, recovery_code: str, new_pin: str) -> O
     row.pin_hash = hash_pin(new_pin)
     _clear_failures(db, row)
     db.commit()
+    # A PIN reset is the "I lost control of this account" path, so any
+    # session opened before it should stop working.
+    revoke_sessions(db, row.username)
     return User(username=row.username, createdAt=row.created_at)
 
 
@@ -436,5 +489,6 @@ def reset(db: Session) -> None:
     db.query(QuizResultRow).delete()
     db.query(QuizRow).delete()
     db.query(LeaderboardRow).delete()
+    db.query(SessionRow).delete()
     db.query(UserRow).delete()
     db.commit()

@@ -1,6 +1,6 @@
 # Math Adventures HQ — Project Plan
 
-_Last updated: 2026-07-19_
+_Last updated: 2026-07-20_
 
 This document collects the roadmap for expanding the quiz, the known bugs
 and rough edges found while auditing the codebase, the testing gaps, and
@@ -24,18 +24,10 @@ Completed work moves to the **Done** section at the bottom.
 
 ## 2. Known bugs & issues
 
-From the 2026-07-15 audit; items are struck off as they land (see Done).
-Remaining, ordered by impact:
-
-1. **Stats/suggested-level endpoints are unauthenticated.** Anyone can
-   read any player's progress by guessing a username. Low severity for
-   this app, but if PINs are meant to "own" a name, stats arguably
-   should sit behind login too.
-2. **Usernames are an open namespace.** Creation is unauthenticated and
-   unthrottled, and the charset is unrestricted — someone could squat
-   names or fill the users table. Restrict to a sane charset and add a
-   creation rate limit. (Login/reset brute-forcing is now covered by the
-   per-account lockout.)
+**Empty.** Every item from the 2026-07-15 audit has landed — the last
+two (unauthenticated stats and the open username namespace) shipped on
+2026-07-20; see Done. New findings go here as they're spotted; the next
+audit is worth running once §3 is cleared.
 
 ---
 
@@ -98,9 +90,10 @@ Done (2026-07-19). Remaining findings, ordered by impact:
 
 - **More component tests** — QuizScreen timers/MC/navigation (dot strip,
   draft-saving Back/Next, blank-check confirm), UsernameScreen PIN flow,
-  Index submit-retry, Leaderboard filters, ProgressScreen, and
-  ShapeFigure are covered now; still missing: ResultsScreen
-  recommendation/figure rendering from a `QuizResult` fixture.
+  Index submit-retry, session-token handling in the API client,
+  Leaderboard filters, ProgressScreen, and ShapeFigure are covered now;
+  still missing: ResultsScreen recommendation/figure rendering from a
+  `QuizResult` fixture.
 - **Flow-level test with a mocked API** (MSW): username → setup → quiz →
   results against canned responses.
 - **Automated Playwright smoke test** — the full flow has been verified
@@ -139,14 +132,38 @@ Done (2026-07-19). Remaining findings, ordered by impact:
 
 | Phase | Items | Why first |
 |---|---|---|
-| 1 — hardening | Username namespace (§2.2); stats behind login (§2.1) | Remaining security/robustness gaps from the accounts work |
-| 2 — polish | Rest of §3 (time-warning, mobile keyboard, setup nudge, leaderboard chips, copy button, a11y, quiz quit); worksheet export; practice vs. challenge mode; more visual questions | Additive depth on a solid base |
+| 1 — polish | §3 findings 1–7 (time warning, mobile keyboard, setup nudge, leaderboard chips, copy button, a11y, quiz quit) | Small, self-contained UX wins; the app is now functionally and structurally sound |
+| 2 — depth | Worksheet export; practice vs. challenge mode; more visual questions (§1) | Additive features on a solid base |
+| 3 — internals | Generated API types, `questions.py` split, attempts-table rename, per-topic difficulty tuning (§5) | Pay down as the library keeps growing |
 
 ---
 
 ## Done
 
 Completed items, newest first.
+
+### 2026-07-20 — private progress + username namespace (was §2.1, §2.2)
+
+- **A player's history is now their own.** Signup, login and PIN reset
+  hand back a 30-day session token (`sessions` table, migration `0003`;
+  only the token's SHA-256 is stored, since 256 random bits need no slow
+  KDF). `GET /api/users/{name}/stats` and `/suggested-level` require a
+  bearer token whose account matches the name in the path — no token,
+  someone else's token, an expired one, or a malformed header all get a
+  401. A PIN reset revokes every session issued before it, which is the
+  point of a reset. The leaderboard stays public. The frontend keeps the
+  token in memory only (a shared family computer shouldn't hold a
+  session across reloads) and drops it whenever a player heads Home.
+- **Usernames are no longer a free-for-all.** One shared `Username` type
+  (letters, digits, spaces, `-`, `_`, `'`; Unicode-aware so "José"
+  works; must start with a letter or digit; trimmed, 1–20 chars) now
+  guards signup, login, PIN reset, quiz creation and the availability
+  check, so markup, control characters and emoji bounce with a 422.
+  Signup — the one unauthenticated write — is rate-limited per client IP
+  (default 10/hour, `SIGNUP_RATE_LIMIT` / `SIGNUP_RATE_WINDOW_SECONDS`,
+  `0` disables) with a 429 + `Retry-After`. Failed attempts count too,
+  so hammering one taken name isn't a free pass; logins are untouched so
+  a family sharing an IP can still all sign in.
 
 ### 2026-07-19 — quiz controls redesign + failed-submit retry (was §3.1, §3.2.1)
 

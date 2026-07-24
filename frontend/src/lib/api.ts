@@ -73,10 +73,28 @@ export interface LeaderboardEntry {
   achievedAt: string;
 }
 
+// Session token from signup / login / PIN reset. Kept in memory only:
+// a reload drops you back at the login screen anyway, so there's nothing
+// to gain from persisting it (and one less thing to leak on a shared
+// family computer).
+let authToken: string | null = null;
+
+export function setAuthToken(token: string | null) {
+  authToken = token;
+}
+
+export function getAuthToken() {
+  return authToken;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
     ...init,
-    headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
+    headers: {
+      "Content-Type": "application/json",
+      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+      ...(init?.headers ?? {}),
+    },
   });
 
   if (!res.ok) {
@@ -97,26 +115,41 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await res.json()) as T;
 }
 
+interface AuthenticatedUser {
+  username: string;
+  createdAt: string;
+  /** Session token for the player's own endpoints (progress, suggested level). */
+  token: string;
+}
+
+/** Signup/login/reset all hand back a session; remember it for later calls. */
+async function authenticate<T extends AuthenticatedUser>(
+  path: string,
+  body: Record<string, string>,
+): Promise<T> {
+  const user = await request<T>(path, { method: "POST", body: JSON.stringify(body) });
+  setAuthToken(user.token);
+  return user;
+}
+
 export function createUser(username: string, pin: string) {
   // recoveryCode is returned exactly once, at signup — show it to the
   // player immediately; it can never be fetched again.
-  return request<{ username: string; createdAt: string; recoveryCode: string }>("/api/users", {
-    method: "POST",
-    body: JSON.stringify({ username, pin }),
+  return authenticate<AuthenticatedUser & { recoveryCode: string }>("/api/users", {
+    username,
+    pin,
   });
 }
 
 export function login(username: string, pin: string) {
-  return request<{ username: string; createdAt: string }>("/api/users/login", {
-    method: "POST",
-    body: JSON.stringify({ username, pin }),
-  });
+  return authenticate<AuthenticatedUser>("/api/users/login", { username, pin });
 }
 
 export function resetPin(username: string, recoveryCode: string, newPin: string) {
-  return request<{ username: string; createdAt: string }>("/api/users/reset-pin", {
-    method: "POST",
-    body: JSON.stringify({ username, recoveryCode, newPin }),
+  return authenticate<AuthenticatedUser>("/api/users/reset-pin", {
+    username,
+    recoveryCode,
+    newPin,
   });
 }
 

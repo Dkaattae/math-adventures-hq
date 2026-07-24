@@ -26,7 +26,7 @@ paths:
         - in: query
           name: username
           required: true
-          schema: { type: string, minLength: 1, maxLength: 20 }
+          schema: { type: string, minLength: 1, maxLength: 20, pattern: "^[^\\W_][\\w \\-']*$" }
       responses:
         "200":
           description: Availability result
@@ -52,7 +52,7 @@ paths:
               type: object
               required: [username, pin]
               properties:
-                username: { type: string, minLength: 1, maxLength: 20 }
+                username: { type: string, minLength: 1, maxLength: 20, pattern: "^[^\\W_][\\w \\-']*$" }
                 pin: { type: string, pattern: "^[0-9]{4}$", description: "4-digit numeric PIN" }
       responses:
         "201":
@@ -63,6 +63,13 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "409":
           description: Username already taken
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429":
+          description: |
+            Too many signups from this client (Retry-After header set).
+            Tunable with SIGNUP_RATE_LIMIT / SIGNUP_RATE_WINDOW_SECONDS.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -79,14 +86,14 @@ paths:
               type: object
               required: [username, pin]
               properties:
-                username: { type: string, minLength: 1, maxLength: 20 }
+                username: { type: string, minLength: 1, maxLength: 20, pattern: "^[^\\W_][\\w \\-']*$" }
                 pin: { type: string, pattern: "^[0-9]{4}$" }
       responses:
         "200":
-          description: Logged in
+          description: Logged in; the token authenticates the player's own endpoints
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/User" }
+              schema: { $ref: "#/components/schemas/AuthenticatedUser" }
         "401":
           description: Wrong username / PIN (counts toward the lockout)
           content:
@@ -110,15 +117,17 @@ paths:
               type: object
               required: [username, recoveryCode, newPin]
               properties:
-                username: { type: string, minLength: 1, maxLength: 20 }
+                username: { type: string, minLength: 1, maxLength: 20, pattern: "^[^\\W_][\\w \\-']*$" }
                 recoveryCode: { type: string, example: "gold-otter-731" }
                 newPin: { type: string, pattern: "^[0-9]{4}$" }
       responses:
         "200":
-          description: PIN updated; player is logged in
+          description: |
+            PIN updated and the player is logged in with a fresh token.
+            Any session opened before the reset is revoked.
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/User" }
+              schema: { $ref: "#/components/schemas/AuthenticatedUser" }
         "401":
           description: Wrong rescue code (counts toward the lockout)
           content:
@@ -134,6 +143,9 @@ paths:
     get:
       tags: [users]
       summary: A player's progress — totals, per-topic stats, recent quizzes
+      description: Requires the player's own session token.
+      security:
+        - bearerAuth: []
       parameters:
         - in: path
           name: username
@@ -141,15 +153,19 @@ paths:
           schema: { type: string }
       responses:
         "200":
-          description: Aggregated stats (all zeros/empty for an unknown or new player)
+          description: Aggregated stats (all zeros/empty for a new player)
           content:
             application/json:
               schema: { $ref: "#/components/schemas/UserStats" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
 
   /api/users/{username}/suggested-level:
     get:
       tags: [users]
       summary: Level to start a returning player at, from their recent history
+      description: Requires the player's own session token.
+      security:
+        - bearerAuth: []
       parameters:
         - in: path
           name: username
@@ -173,6 +189,7 @@ paths:
                 oneOf:
                   - $ref: "#/components/schemas/SuggestedLevel"
                   - type: "null"
+        "401": { $ref: "#/components/responses/Unauthorized" }
 
   /api/quizzes:
     post:
@@ -191,7 +208,7 @@ paths:
               type: object
               required: [username, grade, mathType, difficulty]
               properties:
-                username: { type: string }
+                username: { type: string, minLength: 1, maxLength: 20, pattern: "^[^\\W_][\\w \\-']*$" }
                 grade:      { $ref: "#/components/schemas/Grade" }
                 mathType:   { $ref: "#/components/schemas/MathType" }
                 difficulty: { $ref: "#/components/schemas/Difficulty" }
@@ -291,6 +308,15 @@ paths:
                 items: { $ref: "#/components/schemas/LeaderboardEntry" }
 
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: |
+        Session token from POST /api/users, /api/users/login or
+        /api/users/reset-pin. Valid for 30 days; a PIN reset revokes every
+        token issued before it.
+
   parameters:
     QuizId:
       in: path
@@ -301,6 +327,11 @@ components:
   responses:
     BadRequest:
       description: Invalid request payload
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Unauthorized:
+      description: Missing, expired, or someone else's session token
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
@@ -346,9 +377,19 @@ components:
         username:  { type: string }
         createdAt: { type: string, format: date-time }
 
-    UserCreated:
+    AuthenticatedUser:
       allOf:
         - $ref: "#/components/schemas/User"
+        - type: object
+          required: [token]
+          properties:
+            token:
+              type: string
+              description: Bearer token for this player's own endpoints.
+
+    UserCreated:
+      allOf:
+        - $ref: "#/components/schemas/AuthenticatedUser"
         - type: object
           required: [recoveryCode]
           properties:

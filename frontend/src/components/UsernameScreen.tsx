@@ -60,7 +60,10 @@ const UsernameScreen = ({ onSubmit }: Props) => {
       setMode("returning");
       setError("That name was just taken — enter its PIN to log in.");
     } else if (err instanceof ApiError && err.status === 422) {
-      setError("Names are up to 20 characters and PINs are 4 digits. ✂️");
+      setError(
+        "Names can use letters, numbers, spaces, - and _ (up to 20), " +
+        "and PINs are 4 digits. ✂️",
+      );
     } else {
       setError("Couldn't reach the server. Please try again 🔌");
     }
