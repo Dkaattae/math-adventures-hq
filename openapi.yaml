@@ -463,7 +463,12 @@ components:
       required: [id, question]
       properties:
         id:       { type: integer, minimum: 0 }
-        question: { type: string, example: "7 + 5 = ?" }
+        question:
+          type: string
+          description: |
+            May contain newlines: word problems are a titled list followed
+            by the question, and should be rendered with line breaks kept.
+          example: "7 + 5 = ?"
         options:
           type: array
           nullable: true
@@ -476,6 +481,16 @@ components:
           description: Shape name to draw for a visual geometry question (e.g. "pentagon"); null otherwise.
           example: "pentagon"
         answerKind: { $ref: "#/components/schemas/AnswerKind" }
+        timeLimitSeconds:
+          type: integer
+          minimum: 5
+          maximum: 300
+          default: 15
+          description: |
+            Seconds this question is worth on the client's clock. One-line
+            questions keep the standard 15; multi-line word-problem scenes
+            earn reading time. Clients should size the whole-quiz clock
+            from the sum of these rather than assuming 3 minutes.
 
     QuestionResult:
       allOf:

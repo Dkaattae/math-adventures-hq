@@ -17,8 +17,26 @@ leaderboard.
   same-topic decoys), so multiple choice works for every topic.
 - **Grade & difficulty tiers**: every topic scales with grade (K–5) and
   difficulty (easy/medium/hard) — e.g. division introduces remainders at
-  grade 3 medium and fractions/decimals at grade 5 hard; word problems
-  add division stories at grade 3 hard.
+  grade 3 medium and fractions/decimals at grade 5 hard.
+- **Word problems that are actually word problems**: instead of "Maya has
+  9 apples and gives 2 away", these build a scene that carries facts the
+  answer doesn't need. Six question *shapes* — not just six vocabularies
+  — across 38 settings, and a quiz deals through them so ten questions
+  never share one skeleton:
+  - **sift a list** — which of these belong in the produce aisle?
+  - **prices** — quantity × price, then a total, change, or a split bill
+  - **scoring rules** — "a touchdown is 6 points, a field goal is 3",
+    then what the score sheet says (the rules are spelled out, so a kid
+    who's never watched football can still answer, and one listed rule
+    is always a red herring)
+  - **sale offers** — "$3 each, or 2 for $5", where leftovers pay full
+    price
+  - **two ways to buy** — white peaches at $2 each or yellow peaches 2
+    for $3: which works out cheaper? And if the list says *white*
+    peaches, the bargain doesn't apply
+  - **short stories** for K–1, where the reading is the hard part
+  Scene-setting noise appears only *sometimes*, so "ignore the last
+  sentence" never becomes the trick.
 - **Grade-appropriate topics**: the setup screen only offers topics that
   fit the chosen grade (no long division for Kindergarteners), and the
   🎲 Mixed quiz samples only from unlocked topics.
@@ -29,7 +47,9 @@ leaderboard.
   button, and returning players' setup screen pre-selects a level from
   their recent history — per topic, so being great at addition doesn't
   start fractions on hard.
-- **Timed quizzes**: 15 seconds per question, 3 minutes total. A tappable
+- **Timed quizzes**: 15 seconds for a one-line question, more for a
+  word-problem scene that has to be read (the whole-quiz clock is the sum
+  of its questions plus a little slack). A tappable
   dot strip shows which questions are answered and jumps anywhere; Back
   and Next keep your typed answer, and finishing with blanks asks first.
   The last 30 seconds are flagged in colour *and* words before the quiz
@@ -85,6 +105,7 @@ leaderboard.
 │       ├── db_models.py     # ORM models
 │       ├── models.py        # Pydantic schemas (match openapi.yaml)
 │       ├── questions.py     # per-type question generators + dedup
+│       ├── word_problems.py # real-life scenes for the word problems
 │       ├── storage.py       # DB-backed repository
 │       └── routers/         # users / quizzes / leaderboard
 ├── Dockerfile         # multi-stage: vite build -> python runtime

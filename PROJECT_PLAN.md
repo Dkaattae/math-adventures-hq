@@ -1,6 +1,6 @@
 # Math Adventures HQ — Project Plan
 
-_Last updated: 2026-07-24_
+_Last updated: 2026-07-28_
 
 This document collects the roadmap for expanding the quiz, the known bugs
 and rough edges found while auditing the codebase, the testing gaps, and
@@ -106,10 +106,11 @@ findings, ordered by impact:
   and each user's quiz history (via `query_user_stats`). Consider a
   dedicated history/attempts table, or rename to reflect that it's an
   attempts log the leaderboard reads from.
-- **Split `questions.py`** (~1400 lines and growing) into a package:
+- **Split `questions.py`** (~1400 lines) into a package:
   `questions/arithmetic.py`, `fractions.py`, `order_of_ops.py`,
-  `word_problems.py`, `geometry_data.py`, `distractors.py`, etc., behind
-  the same `generate_questions` facade.
+  `geometry_data.py`, `distractors.py`, etc., behind the same
+  `generate_questions` facade. Word problems already moved out to
+  `word_problems.py` (2026-07-28) — that split is the template.
 - **Tune difficulty scaling per topic.** `_difficulty_range` is linear in
   grade for every type; multiplication should probably cap factors near
   12 (times tables) regardless of range, and fractions difficulty is
@@ -130,6 +131,52 @@ findings, ordered by impact:
 ## Done
 
 Completed items, newest first.
+
+### 2026-07-28 — word problems became word problems
+
+- **The scenes carry the difficulty now.** The old topic was one-line
+  templates with a name glued on ("Maya has 9 apples and gives 2
+  away") — strip the words and the arithmetic was untouched, so a fifth
+  grader got a kindergarten task in a longer sentence. `word_problems.py`
+  builds a scene instead: a titled list, some facts, and a question that
+  needs *part* of it. Every scene carries information the answer doesn't
+  need, so choosing the relevant numbers is the skill being practised.
+- **Six shapes, not six vocabularies.** The first cut of this rewrite
+  had 15 settings over only two structures (filter a list, price a
+  list), which still reads as one puzzle in fifteen coats. What makes
+  ten questions feel different is shape: short stories (K-1), sifting a
+  list (grade 2), prices — total, change, difference, split the bill
+  (grade 3+), **scoring rules** ("a touchdown is 6 points, a field goal
+  is 3" — stated, because a kid who's never watched football still has
+  to be able to answer, with one listed rule always unused), **sale
+  offers** where leftovers pay full price, and **two ways to buy the
+  same thing** (white peaches $2 each vs yellow peaches 2 for $3 —
+  cheapest wins, unless the list names a kind, in which case the bargain
+  doesn't apply and careless reading costs the mark).
+- **38 settings**: 8 counting lists, 8 priced lists, 12 scoring scenes
+  (football, basketball, arcade tickets, recycling deposits, reading
+  challenge, house points, scout badges, sports day, funfair tokens,
+  board game treasure, chore stars, bird watching) and 10 two-way
+  choices. The name pool went from 10 to 40 and appears **once** per
+  question instead of three times in one sentence.
+- **Rotation, not random draw.** `rotating()` deals from a reshuffled
+  deck of shapes, so a 10-question quiz covers every shape its tier
+  offers before repeating one: 8-9 distinct question types per quiz,
+  measured.
+- **Noise is random.** Scene-setting facts appear zero, one or two at a
+  time and often not at all — if every question ended in a throwaway
+  sentence, ignoring the last sentence would become the trick. Noise
+  built into the structure (list lines from the wrong aisle, the unused
+  scoring rule) always stays: that's the puzzle, not decoration.
+- **Questions carry their own clock.** A five-line shopping list can't be
+  read in the 15 seconds a "7 + 5" needs, so `Question.timeLimitSeconds`
+  gives 15 for anything up to 25 words and roughly a second per word
+  beyond that (capped at 120). The whole-quiz clock is the sum plus 30
+  seconds of slack — which is exactly the old 3 minutes for a quiz of
+  one-liners, so nothing else changed. The client renders multi-line
+  questions with their line breaks and steps the type down.
+- **Grading got more forgiving** where the new questions needed it: "$22",
+  "22 dollars" and "1,200" now count for 22, 22 and 1200.
 
 ### 2026-07-24 — time warning, mobile keyboards, honest Start button (was §3.1–3.3)
 

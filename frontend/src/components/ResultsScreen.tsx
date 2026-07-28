@@ -101,7 +101,7 @@ const ResultsScreen = ({ result, level, onTryLevel, onRedo, onHome }: Props) => 
                 {r.figure && (
                   <ShapeFigure shape={r.figure} className="w-16 h-16 mb-1" />
                 )}
-                <p className="font-heading font-semibold">{r.question}</p>
+                <p className="font-heading font-semibold whitespace-pre-line">{r.question}</p>
                 <p className="text-sm text-muted-foreground">
                   Your answer: <span className="font-bold">{r.userAnswer ?? "—"}</span>
                   {!r.correct && (
@@ -143,7 +143,7 @@ const ResultsScreen = ({ result, level, onTryLevel, onRedo, onHome }: Props) => 
                 transition={{ delay: i * 0.1 }}
                 className="p-4 rounded-xl bg-card border-2 border-secondary/40"
               >
-                <p className="font-heading font-semibold mb-1">{r.question}</p>
+                <p className="font-heading font-semibold mb-1 whitespace-pre-line">{r.question}</p>
                 <p className="text-sm font-body text-muted-foreground">{r.explanation}</p>
               </motion.div>
             ))}

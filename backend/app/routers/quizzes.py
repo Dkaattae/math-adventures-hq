@@ -21,7 +21,7 @@ from ..models import (
     QuizSubmit,
     Recommendation,
 )
-from ..questions import answer_kind, generate_questions, grade_answer
+from ..questions import answer_kind, generate_questions, grade_answer, time_limit_seconds
 
 router = APIRouter(prefix="/api/quizzes", tags=["quizzes"])
 
@@ -48,6 +48,7 @@ def _public_questions(internal_qs) -> list[Question]:
             options=q.options,
             figure=q.figure,
             answerKind=answer_kind(q.correctAnswer),
+            timeLimitSeconds=time_limit_seconds(q.question),
         )
         for q in internal_qs
     ]
