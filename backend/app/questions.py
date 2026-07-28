@@ -547,15 +547,12 @@ def _make_ooo_advanced(rng: random.Random, lo: int, hi: int):
 
 # ---------- word problems ----------
 #
-# The scenes, names and tier factories live in word_problems.py — this
-# topic grew past the one-liner templates the rest of the file uses. Each
-# tier keeps the same (signature, text, answer, explanation) contract.
-
-_make_word_problems_basic = word_problems.make_simple
-_make_word_problems_intermediate = word_problems.make_simple_wide
-_make_word_problems_list = word_problems.make_list
-_make_word_problems_prices = word_problems.make_prices
-_make_word_problems_deals = word_problems.make_deals
+# The scenes and question shapes live in word_problems.py — this topic
+# grew past the one-liner templates the rest of the file uses. Its
+# factories are built per quiz (see _pick_factory) so the ten questions
+# rotate through every shape a tier offers instead of drawing at random;
+# each shape still returns the usual
+# (signature, text, answer, explanation).
 
 
 # ---------- comparison & number sense ----------
@@ -1162,6 +1159,26 @@ def _geometry_pool(difficulty: Difficulty, grade: Grade) -> list[GeometryItem]:
     return _GEOMETRY_MEDIUM + _GEOMETRY_HARD
 
 
+def _word_problem_tier(difficulty: Difficulty, g: int) -> str:
+    """Which set of word-problem shapes a grade/difficulty draws from.
+
+    The scenes get richer as the reading gets easier: one-sentence
+    stories, then sifting a list, then scoring rules and prices, then
+    sale offers and cheapest-option comparisons.
+    """
+    if g >= 5 and difficulty == Difficulty.hard:
+        return "deals"
+    if g >= 5 or (g >= 3 and difficulty != Difficulty.easy) or (
+        g == 2 and difficulty == Difficulty.hard
+    ):
+        return "prices"
+    # Kindergarten never gets a list — the reading alone would be the
+    # whole task.
+    if g >= 2 or (g == 1 and difficulty == Difficulty.hard):
+        return "list_plus" if g >= 2 and difficulty != Difficulty.easy else "list"
+    return "simple" if difficulty == Difficulty.easy else "simple_wide"
+
+
 def _pick_factory(math_type: MathType, difficulty: Difficulty, grade: Grade) -> Factory:
     """Select the right factory for this (math_type, difficulty, grade).
 
@@ -1221,22 +1238,7 @@ def _pick_factory(math_type: MathType, difficulty: Difficulty, grade: Grade) -> 
         return _make_ooo_basic
 
     if math_type == MathType.word_problems:
-        # Scenes get richer with grade: short stories while reading is
-        # still the hard part, then sifting a list, then prices, then
-        # sale offers. See word_problems.py.
-        if g >= 5 and difficulty == Difficulty.hard:
-            return _make_word_problems_deals
-        if g >= 5 or (g >= 3 and difficulty != Difficulty.easy) or (
-            g == 2 and difficulty == Difficulty.hard
-        ):
-            return _make_word_problems_prices
-        # Kindergarten never gets a list — the reading alone would be the
-        # whole task.
-        if g >= 2 or (g == 1 and difficulty == Difficulty.hard):
-            return _make_word_problems_list
-        if difficulty != Difficulty.easy:
-            return _make_word_problems_intermediate
-        return _make_word_problems_basic
+        return word_problems.tier_factory(_word_problem_tier(difficulty, g))
 
     if math_type == MathType.comparison:
         if difficulty == Difficulty.hard and g >= 3:

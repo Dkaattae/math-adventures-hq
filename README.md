@@ -19,13 +19,24 @@ leaderboard.
   difficulty (easy/medium/hard) — e.g. division introduces remainders at
   grade 3 medium and fractions/decimals at grade 5 hard.
 - **Word problems that are actually word problems**: instead of "Maya has
-  9 apples and gives 2 away", the upper tiers build a scene — a shopping
-  list, a supply cupboard, a market stall — that carries facts the answer
-  doesn't need. Kindergarten keeps short stories; grade 2 sifts a
-  categorised list ("how many of these come from the produce aisle?");
-  grade 3–4 adds prices, bills to split and change; grade 5 hard adds
-  sale offers ("$3 each, or 2 for $5") where the leftovers still pay full
-  price.
+  9 apples and gives 2 away", these build a scene that carries facts the
+  answer doesn't need. Six question *shapes* — not just six vocabularies
+  — across 38 settings, and a quiz deals through them so ten questions
+  never share one skeleton:
+  - **sift a list** — which of these belong in the produce aisle?
+  - **prices** — quantity × price, then a total, change, or a split bill
+  - **scoring rules** — "a touchdown is 6 points, a field goal is 3",
+    then what the score sheet says (the rules are spelled out, so a kid
+    who's never watched football can still answer, and one listed rule
+    is always a red herring)
+  - **sale offers** — "$3 each, or 2 for $5", where leftovers pay full
+    price
+  - **two ways to buy** — white peaches at $2 each or yellow peaches 2
+    for $3: which works out cheaper? And if the list says *white*
+    peaches, the bargain doesn't apply
+  - **short stories** for K–1, where the reading is the hard part
+  Scene-setting noise appears only *sometimes*, so "ignore the last
+  sentence" never becomes the trick.
 - **Grade-appropriate topics**: the setup screen only offers topics that
   fit the chosen grade (no long division for Kindergarteners), and the
   🎲 Mixed quiz samples only from unlocked topics.

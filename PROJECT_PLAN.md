@@ -141,22 +141,33 @@ Completed items, newest first.
   builds a scene instead: a titled list, some facts, and a question that
   needs *part* of it. Every scene carries information the answer doesn't
   need, so choosing the relevant numbers is the skill being practised.
-- **Four tiers.** K-1 keeps short stories (reading is the hard part
-  there). Grade 2 sifts a categorised list — "counting every single one,
-  how many come from the produce aisle?" — with the bakery and dairy
-  lines as distractors. Grade 3-4 adds prices: quantity × price per line,
-  then a sum, plus variants for change from a note, the difference
-  between two lines, and splitting the bill (which keeps division in the
-  upper tiers). Grade 5 hard adds sale offers — "$3 each, or 2 for $5",
-  "buy 3 get 1 free" — where leftovers still pay full price, and a
-  "how much did the offer save?" variant.
-- **15 scenes**, 8 counting (grocery, classroom supplies, library,
-  camping, animal shelter, bake sale, garden centre, equipment room) and
-  7 priced (farmers market, book fair, pet shop, hardware, craft shop,
-  food truck, party supplies), each with its own items, prices and
-  irrelevant facts. The name pool went from 10 to 40 and appears **once**
-  per question, in the title of the list, instead of three times in one
-  sentence.
+- **Six shapes, not six vocabularies.** The first cut of this rewrite
+  had 15 settings over only two structures (filter a list, price a
+  list), which still reads as one puzzle in fifteen coats. What makes
+  ten questions feel different is shape: short stories (K-1), sifting a
+  list (grade 2), prices — total, change, difference, split the bill
+  (grade 3+), **scoring rules** ("a touchdown is 6 points, a field goal
+  is 3" — stated, because a kid who's never watched football still has
+  to be able to answer, with one listed rule always unused), **sale
+  offers** where leftovers pay full price, and **two ways to buy the
+  same thing** (white peaches $2 each vs yellow peaches 2 for $3 —
+  cheapest wins, unless the list names a kind, in which case the bargain
+  doesn't apply and careless reading costs the mark).
+- **38 settings**: 8 counting lists, 8 priced lists, 12 scoring scenes
+  (football, basketball, arcade tickets, recycling deposits, reading
+  challenge, house points, scout badges, sports day, funfair tokens,
+  board game treasure, chore stars, bird watching) and 10 two-way
+  choices. The name pool went from 10 to 40 and appears **once** per
+  question instead of three times in one sentence.
+- **Rotation, not random draw.** `rotating()` deals from a reshuffled
+  deck of shapes, so a 10-question quiz covers every shape its tier
+  offers before repeating one: 8-9 distinct question types per quiz,
+  measured.
+- **Noise is random.** Scene-setting facts appear zero, one or two at a
+  time and often not at all — if every question ended in a throwaway
+  sentence, ignoring the last sentence would become the trick. Noise
+  built into the structure (list lines from the wrong aisle, the unused
+  scoring rule) always stays: that's the puzzle, not decoration.
 - **Questions carry their own clock.** A five-line shopping list can't be
   read in the 15 seconds a "7 + 5" needs, so `Question.timeLimitSeconds`
   gives 15 for anything up to 25 words and roughly a second per word
