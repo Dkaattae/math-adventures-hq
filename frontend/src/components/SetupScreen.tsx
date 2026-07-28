@@ -82,6 +82,19 @@ const SetupScreen = ({ username, onStart, onShowProgress }: Props) => {
   const allSelected = grade && mathType && difficulty;
   const message = encouragingMessages[Math.floor(Math.random() * encouragingMessages.length)];
 
+  // The Start button used to appear out of nowhere once everything was
+  // picked, so an incomplete form looked finished (PROJECT_PLAN §3.3).
+  // It's always on screen now, disabled, naming what's still missing.
+  const missing = [
+    !grade && "a grade",
+    !mathType && "a topic",
+    !difficulty && "how tough",
+  ].filter(Boolean) as string[];
+  const nudge =
+    missing.length === 1
+      ? `Pick ${missing[0]} to get started! 👆`
+      : `Still to pick: ${missing.slice(0, -1).join(", ")} and ${missing.at(-1)} 👆`;
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -168,25 +181,20 @@ const SetupScreen = ({ username, onStart, onShowProgress }: Props) => {
           </div>
         </Section>
 
-        {allSelected && (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="text-center space-y-4"
+        <div className="text-center space-y-4">
+          <p className="text-lg font-body text-muted-foreground" role="status">
+            {allSelected ? message.replace("[Name]", username) : nudge}
+          </p>
+          <motion.button
+            whileHover={allSelected ? { scale: 1.03 } : undefined}
+            whileTap={allSelected ? { scale: 0.97 } : undefined}
+            disabled={!allSelected}
+            onClick={() => allSelected && onStart(grade!, mathType!, difficulty!, answerMode)}
+            className="w-full py-4 rounded-2xl bg-primary text-primary-foreground font-heading font-bold text-xl shadow-lg transition-all hover:shadow-xl disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none"
           >
-            <p className="text-lg font-body text-muted-foreground">
-              {message.replace("[Name]", username)}
-            </p>
-            <motion.button
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.97 }}
-              onClick={() => onStart(grade!, mathType!, difficulty!, answerMode)}
-              className="w-full py-4 rounded-2xl bg-primary text-primary-foreground font-heading font-bold text-xl shadow-lg hover:shadow-xl transition-all"
-            >
-              Start Practice 🎉
-            </motion.button>
-          </motion.div>
-        )}
+            Start Practice 🎉
+          </motion.button>
+        </div>
       </div>
     </motion.div>
   );

@@ -32,6 +32,12 @@ leaderboard.
 - **Timed quizzes**: 15 seconds per question, 3 minutes total. A tappable
   dot strip shows which questions are answered and jumps anywhere; Back
   and Next keep your typed answer, and finishing with blanks asks first.
+  The last 30 seconds are flagged in colour *and* words before the quiz
+  auto-submits.
+- **Right keyboard on phones**: each question reports whether its answer
+  is a whole number, a decimal, or free text, so numeric questions bring
+  up a keypad while fractions, `<`/`>` and word answers keep the full
+  keyboard.
 - **Forgiving answer grading**: numeric answers are compared as numbers
   (`0.50` counts for `0.5`), fractions require simplest form by design,
   word answers are case-insensitive.

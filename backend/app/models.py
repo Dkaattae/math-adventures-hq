@@ -49,6 +49,13 @@ class AnswerMode(str, Enum):
     multiple_choice = "multiple_choice"
 
 
+class AnswerKind(str, Enum):
+    """Shape of a question's answer, so the client can pick a keyboard."""
+    integer = "integer"    # non-negative whole number → numeric keypad
+    decimal = "decimal"    # non-negative decimal → keypad with a "."
+    text = "text"          # fractions, "<", words, negatives → full keyboard
+
+
 # ---------- users ----------
 
 # Usernames are a shared, unauthenticated namespace, so keep the charset
@@ -113,6 +120,9 @@ class Question(BaseModel):
     # Present for visual geometry: a shape name the client draws as SVG
     # (e.g. "pentagon", "circle"). None for non-visual questions.
     figure: Optional[str] = None
+    # What sort of answer to expect, so phones can show the right
+    # keyboard for typed answers. Ignored in multiple-choice mode.
+    answerKind: AnswerKind = AnswerKind.text
 
 
 class QuestionInternal(Question):

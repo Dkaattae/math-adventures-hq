@@ -1,6 +1,6 @@
 # Math Adventures HQ — Project Plan
 
-_Last updated: 2026-07-20_
+_Last updated: 2026-07-24_
 
 This document collects the roadmap for expanding the quiz, the known bugs
 and rough edges found while auditing the codebase, the testing gaps, and
@@ -34,33 +34,21 @@ audit is worth running once §3 is cleared.
 ## 3. UI & UX findings (2026-07-18 review)
 
 A front-end-focused pass, prompted by "the quiz has too many buttons and
-I'm not sure what to click." The two sharpest items — the quiz controls
-redesign (was §3.1) and the failed-submit retry — are implemented; see
-Done (2026-07-19). Remaining findings, ordered by impact:
+I'm not sure what to click." The quiz controls redesign and failed-submit
+retry shipped 2026-07-19; the total-time warning, mobile keyboard and
+setup-screen Start button shipped 2026-07-24 (see Done). Remaining
+findings, ordered by impact:
 
-1. **Total-time expiry is a silent rug-pull.** At 0:00 the quiz submits
-   itself with no warning. Turn the total timer red/pulsing for the
-   last 30 seconds so the auto-submit isn't a surprise.
-2. **Mobile keyboard is wrong for most answers.** The answer input is
-   `type="text"` with no `inputMode`, so phones show a full keyboard
-   for "7 + 5". Most topics are numeric; fractions ("3/4"), comparison
-   ("<"), and word answers are not. Backend could tag each question
-   with an expected answer kind so the client can pick
-   `inputMode="numeric"` vs text.
-3. **Setup screen's Start button materializes from nothing.** It only
-   renders once grade+topic+difficulty are all chosen; before that
-   there's no hint anything is missing. Always show it, disabled, with
-   a "pick a grade / topic / difficulty" nudge.
-4. **Leaderboard rows hide their context.** Unfiltered, a "10/10 —
+1. **Leaderboard rows hide their context.** Unfiltered, a "10/10 —
    1m 20s" row doesn't say it was K-easy vs G5-hard. Add small
    grade/topic chips per row.
-5. **Rescue-code interstitial has no copy button.** A parent can't tap
+2. **Rescue-code interstitial has no copy button.** A parent can't tap
    to copy `gold-otter-731` into their notes app.
-6. **Accessibility pass needed.** State is color-only in several places
-   (the red pulse on the timer); buttons lean on emoji. The new dot
-   strip ships with aria-labels, but the rest of the app deserves a
-   keyboard-only + screen-reader once-over.
-7. **No way out of a quiz.** Once started, the only exits are Finish
+3. **Accessibility pass needed.** The dot strip ships with aria-labels
+   and the two timer warnings now say their state in words, but the
+   rest of the app deserves a keyboard-only + screen-reader once-over
+   (buttons lean on emoji; focus order is unverified).
+4. **No way out of a quiz.** Once started, the only exits are Finish
    (which submits) or waiting out the clock. Consider a small "quit"
    with confirmation that discards the attempt.
 
@@ -90,10 +78,11 @@ Done (2026-07-19). Remaining findings, ordered by impact:
 
 - **More component tests** — QuizScreen timers/MC/navigation (dot strip,
   draft-saving Back/Next, blank-check confirm), UsernameScreen PIN flow,
-  Index submit-retry, session-token handling in the API client,
-  Leaderboard filters, ProgressScreen, and ShapeFigure are covered now;
-  still missing: ResultsScreen recommendation/figure rendering from a
-  `QuizResult` fixture.
+  Index submit-retry, session-token handling in the API client, the
+  total-time warning and per-question `inputMode`, the setup screen's
+  Start/nudge states, Leaderboard filters, ProgressScreen, and
+  ShapeFigure are covered now; still missing: ResultsScreen
+  recommendation/figure rendering from a `QuizResult` fixture.
 - **Flow-level test with a mocked API** (MSW): username → setup → quiz →
   results against canned responses.
 - **Automated Playwright smoke test** — the full flow has been verified
@@ -132,7 +121,7 @@ Done (2026-07-19). Remaining findings, ordered by impact:
 
 | Phase | Items | Why first |
 |---|---|---|
-| 1 — polish | §3 findings 1–7 (time warning, mobile keyboard, setup nudge, leaderboard chips, copy button, a11y, quiz quit) | Small, self-contained UX wins; the app is now functionally and structurally sound |
+| 1 — polish | §3 findings 1–4 (leaderboard chips, rescue-code copy button, a11y pass, quiz quit) | Small, self-contained UX wins; the app is now functionally and structurally sound |
 | 2 — depth | Worksheet export; practice vs. challenge mode; more visual questions (§1) | Additive features on a solid base |
 | 3 — internals | Generated API types, `questions.py` split, attempts-table rename, per-topic difficulty tuning (§5) | Pay down as the library keeps growing |
 
@@ -141,6 +130,28 @@ Done (2026-07-19). Remaining findings, ordered by impact:
 ## Done
 
 Completed items, newest first.
+
+### 2026-07-24 — time warning, mobile keyboards, honest Start button (was §3.1–3.3)
+
+- **The quiz no longer ends without warning.** The whole-quiz clock
+  turns red and pulses for its last 30 seconds, and — because colour
+  alone reaches neither a screen reader nor a kid who can't tell red
+  from grey — a `role="status"` line says "Less than 30 seconds left —
+  finish up!" in words. The 0:00 auto-submit itself is unchanged.
+- **Phones show the right keyboard.** Questions now carry an
+  `answerKind` (`integer` / `decimal` / `text`) derived from the correct
+  answer rather than the topic, since a topic isn't uniform — division
+  alone yields whole numbers, decimals *and* fractions. The client maps
+  it to `inputMode`, so "7 + 5" gets a numeric keypad while fractions
+  ("3/5"), comparisons ("<"), words and **negative answers** keep the
+  full keyboard: phone keypads have no minus or "/" key. The input stays
+  `type="text"` so nothing becomes untypable, and the field is derived
+  at read time so it can't drift from the answer it describes.
+- **The setup screen stops hiding its Start button.** It's always on
+  screen, disabled until the form is complete, with a nudge naming
+  what's left ("Still to pick: a topic and how tough 👆") that narrows
+  as choices are made and gives way to the encouraging message at the
+  end. An incomplete form no longer looks finished.
 
 ### 2026-07-20 — private progress + username namespace (was §2.1, §2.2)
 

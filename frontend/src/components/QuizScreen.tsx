@@ -10,6 +10,18 @@ interface Props {
 
 const QUESTION_TIME = 15;
 const TOTAL_TIME = 180;
+// The whole quiz auto-submits at 0:00, so warn before it happens
+// (PROJECT_PLAN §3.1) rather than yanking the page away silently.
+const TOTAL_WARNING_TIME = 30;
+
+// Phone keyboards: only promise a numeric keypad when the answer really
+// is a non-negative number — keypads have no minus, "/" or letters
+// (PROJECT_PLAN §3.2).
+const INPUT_MODES = {
+  integer: "numeric",
+  decimal: "decimal",
+  text: "text",
+} as const;
 
 // Interaction model (PROJECT_PLAN §3.1): review-before-submit. Answers
 // only save locally until Finish; Back/Next both keep the typed draft;
@@ -161,8 +173,10 @@ const QuizScreen = ({ questions, onFinish }: Props) => {
   const totalMins = Math.floor(totalTimer / 60);
   const totalSecs = totalTimer % 60;
   const qTimerUrgent = questionTimer <= 5;
+  const totalUrgent = totalTimer <= TOTAL_WARNING_TIME;
   const options = questions[current].options;
   const isMultipleChoice = Array.isArray(options) && options.length > 0;
+  const inputMode = INPUT_MODES[questions[current].answerKind ?? "text"];
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="min-h-screen flex flex-col p-4 md:p-6">
@@ -171,10 +185,25 @@ const QuizScreen = ({ questions, onFinish }: Props) => {
         <div className={`font-heading font-bold text-lg px-4 py-2 rounded-xl ${qTimerUrgent ? "bg-destructive text-destructive-foreground animate-pulse" : "bg-card border border-border"}`}>
           ⏱ {questionTimer}s
         </div>
-        <div className="font-heading font-semibold text-muted-foreground">
+        <div
+          className={`font-heading font-semibold px-3 py-1 rounded-xl ${
+            totalUrgent
+              ? "bg-destructive text-destructive-foreground animate-pulse"
+              : "text-muted-foreground"
+          }`}
+        >
+          {totalUrgent && "⏰ "}
           {totalMins}:{totalSecs.toString().padStart(2, "0")} left
         </div>
       </div>
+
+      {/* The colour change alone wouldn't reach a screen reader (or a
+          kid who can't tell red from grey), so say it in words too. */}
+      {totalUrgent && (
+        <p role="status" className="text-center font-heading font-semibold text-destructive mb-3">
+          ⏰ Less than {TOTAL_WARNING_TIME} seconds left — finish up!
+        </p>
+      )}
 
       {/* Question dots: progress, review, and navigation in one strip */}
       <div className="flex justify-center gap-1.5 flex-wrap mb-6" role="group" aria-label="Quiz questions">
@@ -248,6 +277,7 @@ const QuizScreen = ({ questions, onFinish }: Props) => {
             ) : (
               <input
                 type="text"
+                inputMode={inputMode}
                 value={inputVal}
                 onChange={(e) => setInputVal(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && (current < 9 ? goNext() : requestFinish())}

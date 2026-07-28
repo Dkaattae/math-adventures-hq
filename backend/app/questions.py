@@ -21,7 +21,7 @@ import re
 from math import gcd
 from typing import Callable
 
-from .models import AnswerMode, Difficulty, Grade, MathType, QuestionInternal
+from .models import AnswerKind, AnswerMode, Difficulty, Grade, MathType, QuestionInternal
 
 _MAX_ATTEMPTS = 200
 
@@ -1521,6 +1521,34 @@ def _parse_number(s: str) -> float | None:
         return float(s)
     except ValueError:
         return None
+
+
+def answer_kind(correct: int | str) -> AnswerKind:
+    """Which on-screen keyboard fits this answer (PROJECT_PLAN §3.2).
+
+    Derived from the answer itself rather than the topic, because a topic
+    isn't uniform: division yields whole numbers, decimals *and*
+    fractions. Negative answers stay `text` on purpose — phone numeric
+    keypads have no minus key, so a kid typing "-3" needs the full one.
+    Fractions ("3/5"), comparisons ("<") and words ("hexagon") are text
+    for the same reason.
+
+    This is a keyboard hint, not a spoiler: it says an answer is some
+    non-negative number, which the question already implies.
+    """
+    if isinstance(correct, bool):  # bool is an int subclass — never an answer
+        return AnswerKind.text
+    if isinstance(correct, int):
+        return AnswerKind.integer if correct >= 0 else AnswerKind.text
+    if isinstance(correct, float):
+        return AnswerKind.decimal if correct >= 0 else AnswerKind.text
+
+    text = str(correct).strip()
+    if re.fullmatch(r"\d+", text):
+        return AnswerKind.integer
+    if re.fullmatch(r"\d*\.\d+", text):
+        return AnswerKind.decimal
+    return AnswerKind.text
 
 
 def grade_answer(correct: int | str, user: str | None) -> bool:
