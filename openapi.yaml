@@ -370,6 +370,17 @@ components:
       enum: [typing, multiple_choice]
       default: typing
 
+    AnswerKind:
+      type: string
+      enum: [integer, decimal, text]
+      default: text
+      description: |
+        Shape of a question's answer, so a client can pick the matching
+        on-screen keyboard: `integer` → numeric keypad, `decimal` → keypad
+        with a decimal point, `text` → full keyboard. Derived from the
+        answer itself, so fractions ("3/5"), comparisons ("<"), words and
+        negative numbers are all `text` (keypads have no minus or "/").
+
     User:
       type: object
       required: [username, createdAt]
@@ -464,6 +475,7 @@ components:
           nullable: true
           description: Shape name to draw for a visual geometry question (e.g. "pentagon"); null otherwise.
           example: "pentagon"
+        answerKind: { $ref: "#/components/schemas/AnswerKind" }
 
     QuestionResult:
       allOf:

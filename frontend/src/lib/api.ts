@@ -13,6 +13,9 @@ export class ApiError extends Error {
   }
 }
 
+/** What the answer looks like, so we can pick a phone keyboard. */
+export type AnswerKind = "integer" | "decimal" | "text";
+
 export interface Question {
   id: number;
   question: string;
@@ -20,6 +23,7 @@ export interface Question {
   options?: string[] | null;
   // Present for visual geometry: a shape name to draw (e.g. "pentagon").
   figure?: string | null;
+  answerKind?: AnswerKind;
 }
 
 export interface QuestionResult {

@@ -62,8 +62,8 @@ describe("SetupScreen grade gating", () => {
     fireEvent.click(screen.getByRole("button", { name: /Easy/ }));
     fireEvent.click(screen.getByRole("button", { name: "K" }));
 
-    // Division is gone and the start button shouldn't appear (no topic chosen).
+    // Division is gone, and Start goes back to disabled (no topic chosen).
     expect(screen.queryByRole("button", { name: /Division/ })).toBeNull();
-    expect(screen.queryByText(/Start Practice/)).toBeNull();
+    expect(screen.getByRole("button", { name: /Start Practice/ })).toBeDisabled();
   });
 });

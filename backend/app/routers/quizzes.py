@@ -21,7 +21,7 @@ from ..models import (
     QuizSubmit,
     Recommendation,
 )
-from ..questions import generate_questions, grade_answer
+from ..questions import answer_kind, generate_questions, grade_answer
 
 router = APIRouter(prefix="/api/quizzes", tags=["quizzes"])
 
@@ -39,8 +39,16 @@ def _badge_for(score: int) -> str | None:
 
 
 def _public_questions(internal_qs) -> list[Question]:
+    # answerKind is derived from the correct answer at read time rather
+    # than stored, so it can never drift from the key it describes.
     return [
-        Question(id=q.id, question=q.question, options=q.options, figure=q.figure)
+        Question(
+            id=q.id,
+            question=q.question,
+            options=q.options,
+            figure=q.figure,
+            answerKind=answer_kind(q.correctAnswer),
+        )
         for q in internal_qs
     ]
 
