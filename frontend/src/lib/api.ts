@@ -24,6 +24,8 @@ export interface Question {
   // Present for visual geometry: a shape name to draw (e.g. "pentagon").
   figure?: string | null;
   answerKind?: AnswerKind;
+  /** Seconds on the clock for this question — long scenes need reading time. */
+  timeLimitSeconds?: number;
 }
 
 export interface QuestionResult {

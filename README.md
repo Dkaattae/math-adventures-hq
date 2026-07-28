@@ -17,8 +17,15 @@ leaderboard.
   same-topic decoys), so multiple choice works for every topic.
 - **Grade & difficulty tiers**: every topic scales with grade (K–5) and
   difficulty (easy/medium/hard) — e.g. division introduces remainders at
-  grade 3 medium and fractions/decimals at grade 5 hard; word problems
-  add division stories at grade 3 hard.
+  grade 3 medium and fractions/decimals at grade 5 hard.
+- **Word problems that are actually word problems**: instead of "Maya has
+  9 apples and gives 2 away", the upper tiers build a scene — a shopping
+  list, a supply cupboard, a market stall — that carries facts the answer
+  doesn't need. Kindergarten keeps short stories; grade 2 sifts a
+  categorised list ("how many of these come from the produce aisle?");
+  grade 3–4 adds prices, bills to split and change; grade 5 hard adds
+  sale offers ("$3 each, or 2 for $5") where the leftovers still pay full
+  price.
 - **Grade-appropriate topics**: the setup screen only offers topics that
   fit the chosen grade (no long division for Kindergarteners), and the
   🎲 Mixed quiz samples only from unlocked topics.
@@ -29,7 +36,9 @@ leaderboard.
   button, and returning players' setup screen pre-selects a level from
   their recent history — per topic, so being great at addition doesn't
   start fractions on hard.
-- **Timed quizzes**: 15 seconds per question, 3 minutes total. A tappable
+- **Timed quizzes**: 15 seconds for a one-line question, more for a
+  word-problem scene that has to be read (the whole-quiz clock is the sum
+  of its questions plus a little slack). A tappable
   dot strip shows which questions are answered and jumps anywhere; Back
   and Next keep your typed answer, and finishing with blanks asks first.
   The last 30 seconds are flagged in colour *and* words before the quiz
@@ -85,6 +94,7 @@ leaderboard.
 │       ├── db_models.py     # ORM models
 │       ├── models.py        # Pydantic schemas (match openapi.yaml)
 │       ├── questions.py     # per-type question generators + dedup
+│       ├── word_problems.py # real-life scenes for the word problems
 │       ├── storage.py       # DB-backed repository
 │       └── routers/         # users / quizzes / leaderboard
 ├── Dockerfile         # multi-stage: vite build -> python runtime

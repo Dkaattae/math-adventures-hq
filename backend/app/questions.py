@@ -21,6 +21,7 @@ import re
 from math import gcd
 from typing import Callable
 
+from . import word_problems
 from .models import AnswerKind, AnswerMode, Difficulty, Grade, MathType, QuestionInternal
 
 _MAX_ATTEMPTS = 200
@@ -544,75 +545,17 @@ def _make_ooo_advanced(rng: random.Random, lo: int, hi: int):
     return rng.choice([_ooo_sub_mul, _ooo_div_add, _ooo_three_terms, _ooo_parens])(rng, lo, hi)
 
 
-# ---------- word problems: arithmetic wrapped in short stories ----------
+# ---------- word problems ----------
 #
-# The numbers (not the names/items) form the dedup signature, so a retry
-# after a collision redraws the numbers rather than just the character.
+# The scenes, names and tier factories live in word_problems.py — this
+# topic grew past the one-liner templates the rest of the file uses. Each
+# tier keeps the same (signature, text, answer, explanation) contract.
 
-_WP_NAMES = ["Maya", "Leo", "Ava", "Noah", "Zoe", "Sam", "Mia", "Eli", "Ruby", "Max"]
-_WP_ITEMS = ["stickers", "marbles", "crayons", "apples", "cookies", "toy cars", "seashells", "balloons"]
-
-
-def _wp_add(rng: random.Random, lo: int, hi: int):
-    a, b = rng.randint(lo, hi), rng.randint(lo, hi)
-    name, item = rng.choice(_WP_NAMES), rng.choice(_WP_ITEMS)
-    lo_, hi_ = (a, b) if a <= b else (b, a)
-    return (
-        ("wp_add", lo_, hi_),
-        f"{name} has {a} {item} and gets {b} more. How many {item} does {name} have now?",
-        a + b,
-        f"{a} + {b} = {a + b}. Count on {b} more from {a}! 📖",
-    )
-
-
-def _wp_sub(rng: random.Random, lo: int, hi: int):
-    a = rng.randint(lo, hi)
-    b = rng.randint(lo, min(a, hi))
-    name, item = rng.choice(_WP_NAMES), rng.choice(_WP_ITEMS)
-    return (
-        ("wp_sub", a, b),
-        f"{name} has {a} {item} and gives {b} to a friend. How many {item} does {name} have left?",
-        a - b,
-        f"{a} - {b} = {a - b}. Take away {b} from {a}! 📖",
-    )
-
-
-def _wp_mul(rng: random.Random, lo: int, hi: int):
-    a = rng.randint(2, max(3, hi // 3))
-    b = rng.randint(2, max(3, hi // 2))
-    item = rng.choice(_WP_ITEMS)
-    return (
-        ("wp_mul", a, b),
-        f"There are {a} bags with {b} {item} in each bag. How many {item} are there in all?",
-        a * b,
-        f"{a} bags × {b} each = {a * b}. That's {a} groups of {b}! 📖",
-    )
-
-
-def _wp_div(rng: random.Random, lo: int, hi: int):
-    divisor = rng.randint(2, max(3, hi // 3))
-    answer = rng.randint(2, max(3, hi // 2))
-    dividend = divisor * answer
-    name, item = rng.choice(_WP_NAMES), rng.choice(_WP_ITEMS)
-    return (
-        ("wp_div", dividend, divisor),
-        f"{name} shares {dividend} {item} equally among {divisor} friends. "
-        f"How many does each friend get?",
-        answer,
-        f"{dividend} ÷ {divisor} = {answer}. Everyone gets a fair share! 📖",
-    )
-
-
-def _make_word_problems_basic(rng: random.Random, lo: int, hi: int):
-    return rng.choice([_wp_add, _wp_sub])(rng, lo, hi)
-
-
-def _make_word_problems_intermediate(rng: random.Random, lo: int, hi: int):
-    return rng.choice([_wp_add, _wp_sub, _wp_mul])(rng, lo, hi)
-
-
-def _make_word_problems_advanced(rng: random.Random, lo: int, hi: int):
-    return rng.choice([_wp_add, _wp_sub, _wp_mul, _wp_div])(rng, lo, hi)
+_make_word_problems_basic = word_problems.make_simple
+_make_word_problems_intermediate = word_problems.make_simple_wide
+_make_word_problems_list = word_problems.make_list
+_make_word_problems_prices = word_problems.make_prices
+_make_word_problems_deals = word_problems.make_deals
 
 
 # ---------- comparison & number sense ----------
@@ -1278,9 +1221,20 @@ def _pick_factory(math_type: MathType, difficulty: Difficulty, grade: Grade) -> 
         return _make_ooo_basic
 
     if math_type == MathType.word_problems:
-        if difficulty == Difficulty.hard and g >= 3:
-            return _make_word_problems_advanced
-        if g >= 2 and difficulty != Difficulty.easy:
+        # Scenes get richer with grade: short stories while reading is
+        # still the hard part, then sifting a list, then prices, then
+        # sale offers. See word_problems.py.
+        if g >= 5 and difficulty == Difficulty.hard:
+            return _make_word_problems_deals
+        if g >= 5 or (g >= 3 and difficulty != Difficulty.easy) or (
+            g == 2 and difficulty == Difficulty.hard
+        ):
+            return _make_word_problems_prices
+        # Kindergarten never gets a list — the reading alone would be the
+        # whole task.
+        if g >= 2 or (g == 1 and difficulty == Difficulty.hard):
+            return _make_word_problems_list
+        if difficulty != Difficulty.easy:
             return _make_word_problems_intermediate
         return _make_word_problems_basic
 
@@ -1516,11 +1470,41 @@ def generate_questions(
     return questions
 
 
+# Units a question asks for out loud ("How many dollars…"), which a kid
+# may well type back. The answer is right; only the clothes are wrong.
+_ANSWER_UNITS = ("dollars", "dollar", "cents", "cent", "minutes", "minute")
+
+
 def _parse_number(s: str) -> float | None:
+    cleaned = s.strip().lower().lstrip("$").replace(",", "").strip()
+    for unit in _ANSWER_UNITS:
+        if cleaned.endswith(unit):
+            cleaned = cleaned[: -len(unit)].strip()
+            break
     try:
-        return float(s)
+        return float(cleaned)
     except ValueError:
         return None
+
+
+_BASE_QUESTION_SECONDS = 15
+_FREE_WORDS = 25
+_MAX_QUESTION_SECONDS = 120
+
+
+def time_limit_seconds(text: str) -> int:
+    """How long a question is worth, in seconds.
+
+    A one-line sum and a five-line shopping list can't share a clock:
+    15 seconds is generous for "7 + 5 = ?" and impossible for a scene a
+    kid has to read twice. Everything up to 25 words keeps the original
+    15 seconds (so every topic but word problems is unchanged); past
+    that, roughly a second per extra word covers the reading.
+    """
+    words = len(text.split())
+    if words <= _FREE_WORDS:
+        return _BASE_QUESTION_SECONDS
+    return min(_MAX_QUESTION_SECONDS, _BASE_QUESTION_SECONDS + words - _FREE_WORDS)
 
 
 def answer_kind(correct: int | str) -> AnswerKind:

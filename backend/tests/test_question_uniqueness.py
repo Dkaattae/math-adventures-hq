@@ -443,14 +443,16 @@ def test_word_problems_basic_is_add_sub_stories_only():
 
 
 def test_word_problems_advanced_includes_division():
+    """Upper grades still divide — now by splitting a bill rather than
+    sharing stickers (the scenes moved on; the skill didn't)."""
     saw_div = False
     for seed in range(40):
         rng = random.Random(seed)
         qs = generate_questions(MathType.word_problems, Difficulty.hard, Grade.G4, rng=rng)
-        if any("shares" in q.question for q in qs):
+        if any("share the cost equally" in q.question for q in qs):
             saw_div = True
             break
-    assert saw_div, "G4/hard word problems never produced a sharing/division story"
+    assert saw_div, "G4/hard word problems never produced a division story"
 
 
 def test_word_problem_answers_match_the_story():

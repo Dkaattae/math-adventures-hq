@@ -1,6 +1,6 @@
 # Math Adventures HQ — Project Plan
 
-_Last updated: 2026-07-24_
+_Last updated: 2026-07-28_
 
 This document collects the roadmap for expanding the quiz, the known bugs
 and rough edges found while auditing the codebase, the testing gaps, and
@@ -106,10 +106,11 @@ findings, ordered by impact:
   and each user's quiz history (via `query_user_stats`). Consider a
   dedicated history/attempts table, or rename to reflect that it's an
   attempts log the leaderboard reads from.
-- **Split `questions.py`** (~1400 lines and growing) into a package:
+- **Split `questions.py`** (~1400 lines) into a package:
   `questions/arithmetic.py`, `fractions.py`, `order_of_ops.py`,
-  `word_problems.py`, `geometry_data.py`, `distractors.py`, etc., behind
-  the same `generate_questions` facade.
+  `geometry_data.py`, `distractors.py`, etc., behind the same
+  `generate_questions` facade. Word problems already moved out to
+  `word_problems.py` (2026-07-28) — that split is the template.
 - **Tune difficulty scaling per topic.** `_difficulty_range` is linear in
   grade for every type; multiplication should probably cap factors near
   12 (times tables) regardless of range, and fractions difficulty is
@@ -130,6 +131,41 @@ findings, ordered by impact:
 ## Done
 
 Completed items, newest first.
+
+### 2026-07-28 — word problems became word problems
+
+- **The scenes carry the difficulty now.** The old topic was one-line
+  templates with a name glued on ("Maya has 9 apples and gives 2
+  away") — strip the words and the arithmetic was untouched, so a fifth
+  grader got a kindergarten task in a longer sentence. `word_problems.py`
+  builds a scene instead: a titled list, some facts, and a question that
+  needs *part* of it. Every scene carries information the answer doesn't
+  need, so choosing the relevant numbers is the skill being practised.
+- **Four tiers.** K-1 keeps short stories (reading is the hard part
+  there). Grade 2 sifts a categorised list — "counting every single one,
+  how many come from the produce aisle?" — with the bakery and dairy
+  lines as distractors. Grade 3-4 adds prices: quantity × price per line,
+  then a sum, plus variants for change from a note, the difference
+  between two lines, and splitting the bill (which keeps division in the
+  upper tiers). Grade 5 hard adds sale offers — "$3 each, or 2 for $5",
+  "buy 3 get 1 free" — where leftovers still pay full price, and a
+  "how much did the offer save?" variant.
+- **15 scenes**, 8 counting (grocery, classroom supplies, library,
+  camping, animal shelter, bake sale, garden centre, equipment room) and
+  7 priced (farmers market, book fair, pet shop, hardware, craft shop,
+  food truck, party supplies), each with its own items, prices and
+  irrelevant facts. The name pool went from 10 to 40 and appears **once**
+  per question, in the title of the list, instead of three times in one
+  sentence.
+- **Questions carry their own clock.** A five-line shopping list can't be
+  read in the 15 seconds a "7 + 5" needs, so `Question.timeLimitSeconds`
+  gives 15 for anything up to 25 words and roughly a second per word
+  beyond that (capped at 120). The whole-quiz clock is the sum plus 30
+  seconds of slack — which is exactly the old 3 minutes for a quiz of
+  one-liners, so nothing else changed. The client renders multi-line
+  questions with their line breaks and steps the type down.
+- **Grading got more forgiving** where the new questions needed it: "$22",
+  "22 dollars" and "1,200" now count for 22, 22 and 1200.
 
 ### 2026-07-24 — time warning, mobile keyboards, honest Start button (was §3.1–3.3)
 

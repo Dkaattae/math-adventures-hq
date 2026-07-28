@@ -8,8 +8,11 @@ interface Props {
   onFinish: (answers: (string | null)[], timeUsed: number) => void;
 }
 
-const QUESTION_TIME = 15;
-const TOTAL_TIME = 180;
+const DEFAULT_QUESTION_TIME = 15;
+// Slack on top of the per-question budget, so a kid who thinks a little
+// longer on one question doesn't lose the quiz. (10 × 15 + 30 = the 180
+// seconds every quiz had before questions carried their own clocks.)
+const TOTAL_SLACK = 30;
 // The whole quiz auto-submits at 0:00, so warn before it happens
 // (PROJECT_PLAN §3.1) rather than yanking the page away silently.
 const TOTAL_WARNING_TIME = 30;
@@ -29,11 +32,21 @@ const INPUT_MODES = {
 // appears on the last question (or once everything's answered) and warns
 // when blanks remain.
 const QuizScreen = ({ questions, onFinish }: Props) => {
+  // Each question carries its own budget: a five-line shopping list
+  // can't be read in the 15 seconds a "7 + 5" needs. Fixed for the
+  // quiz's lifetime, so the deadlines below can lean on it.
+  const limits = useRef(
+    questions.map((q) => q.timeLimitSeconds ?? DEFAULT_QUESTION_TIME),
+  ).current;
+  const totalTime = useRef(
+    limits.reduce((sum, s) => sum + s, 0) + TOTAL_SLACK,
+  ).current;
+
   const [current, setCurrent] = useState(0);
   const [answers, setAnswers] = useState<(string | null)[]>(Array(10).fill(null));
   const [inputVal, setInputVal] = useState("");
-  const [questionTimer, setQuestionTimer] = useState(QUESTION_TIME);
-  const [totalTimer, setTotalTimer] = useState(TOTAL_TIME);
+  const [questionTimer, setQuestionTimer] = useState(limits[0]);
+  const [totalTimer, setTotalTimer] = useState(totalTime);
   const [confirmingFinish, setConfirmingFinish] = useState(false);
   // The backend never sends the correct answer before the quiz is
   // submitted (anti-cheat), so this is just a "your answer was saved"
@@ -44,8 +57,8 @@ const QuizScreen = ({ questions, onFinish }: Props) => {
   // decrementing state on each tick. A decrementing interval gets torn
   // down and recreated whenever its deps change, which paused the clock
   // while the player was typing.
-  const totalDeadline = useRef(Date.now() + TOTAL_TIME * 1000);
-  const questionDeadline = useRef(Date.now() + QUESTION_TIME * 1000);
+  const totalDeadline = useRef(Date.now() + totalTime * 1000);
+  const questionDeadline = useRef(Date.now() + limits[0] * 1000);
   const finished = useRef(false);
 
   // Latest state, readable from inside the single long-lived interval.
@@ -63,8 +76,8 @@ const QuizScreen = ({ questions, onFinish }: Props) => {
       finalAnswers[current] = inputVal.trim();
     }
     const secondsLeft = Math.max(0, Math.ceil((totalDeadline.current - Date.now()) / 1000));
-    onFinish(finalAnswers, TOTAL_TIME - secondsLeft);
-  }, [onFinish]);
+    onFinish(finalAnswers, totalTime - secondsLeft);
+  }, [onFinish, totalTime]);
 
   // Single interval drives both countdowns for the quiz's whole lifetime.
   useEffect(() => {
@@ -95,20 +108,20 @@ const QuizScreen = ({ questions, onFinish }: Props) => {
           return;
         }
         setCurrent(current + 1);
-        questionDeadline.current = now + QUESTION_TIME * 1000;
+        questionDeadline.current = now + limits[current + 1] * 1000;
       }
     };
     const t = setInterval(tick, 250);
     return () => clearInterval(t);
-  }, [finish]);
+  }, [finish, limits]);
 
-  // Fresh 15 seconds whenever the player lands on a question, including
+  // A fresh budget whenever the player lands on a question, including
   // Back/Next and dot-strip navigation; also drop any pending confirm.
   useEffect(() => {
-    questionDeadline.current = Date.now() + QUESTION_TIME * 1000;
-    setQuestionTimer(QUESTION_TIME);
+    questionDeadline.current = Date.now() + limits[current] * 1000;
+    setQuestionTimer(limits[current]);
     setConfirmingFinish(false);
-  }, [current]);
+  }, [current, limits]);
 
   useEffect(() => {
     setInputVal(answers[current] ?? "");
@@ -177,6 +190,9 @@ const QuizScreen = ({ questions, onFinish }: Props) => {
   const options = questions[current].options;
   const isMultipleChoice = Array.isArray(options) && options.length > 0;
   const inputMode = INPUT_MODES[questions[current].answerKind ?? "text"];
+  // A multi-line question is a scene (a list with a question under it),
+  // not a one-line sum, and needs to be laid out like one.
+  const isScene = questions[current].question.includes("\n");
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="min-h-screen flex flex-col p-4 md:p-6">
@@ -241,7 +257,9 @@ const QuizScreen = ({ questions, onFinish }: Props) => {
             <p className="text-center text-muted-foreground font-heading font-semibold">
               Question {current + 1} of 10
             </p>
-            <div className={`p-8 rounded-3xl border-2 text-center transition-colors ${
+            <div className={`rounded-3xl border-2 transition-colors ${
+              isScene ? "p-5 text-left" : "p-8 text-center"
+            } ${
               feedback === "saved" ? "bg-success/10 border-success" : "bg-card border-border"
             }`}>
               {questions[current].figure && (
@@ -249,7 +267,14 @@ const QuizScreen = ({ questions, onFinish }: Props) => {
                   <ShapeFigure shape={questions[current].figure!} />
                 </div>
               )}
-              <p className="text-2xl md:text-3xl font-heading font-bold">
+              {/* Word problems arrive as a titled list over several
+                  lines, so keep the line breaks and step the type down —
+                  a shopping list at 3xl is a wall. */}
+              <p
+                className={`font-heading font-bold whitespace-pre-line ${
+                  isScene ? "text-base md:text-lg leading-relaxed" : "text-2xl md:text-3xl"
+                }`}
+              >
                 {questions[current].question}
               </p>
             </div>

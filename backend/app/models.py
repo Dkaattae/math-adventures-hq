@@ -123,6 +123,9 @@ class Question(BaseModel):
     # What sort of answer to expect, so phones can show the right
     # keyboard for typed answers. Ignored in multiple-choice mode.
     answerKind: AnswerKind = AnswerKind.text
+    # Seconds this question is worth on the clock. Long word-problem
+    # scenes need reading time that a one-line sum doesn't.
+    timeLimitSeconds: int = Field(default=15, ge=5, le=300)
 
 
 class QuestionInternal(Question):
