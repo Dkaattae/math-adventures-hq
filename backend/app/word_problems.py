@@ -40,6 +40,8 @@ import random
 from dataclasses import dataclass
 from typing import Callable
 
+from .rotation import rotating
+
 # A wide pool so a 10-question quiz rarely repeats a character. Each
 # question mentions its name once, in the opening line.
 NAMES = [
@@ -100,27 +102,6 @@ def _offer_price(rng: random.Random, deal_n: int, low: int, high: int) -> int:
 def _assemble(*blocks: str) -> str:
     """Join the non-empty blocks of a scene with blank lines."""
     return "\n\n".join(b for b in blocks if b)
-
-
-def rotating(builders: tuple[Callable, ...], tier: str):
-    """A factory that deals from a reshuffled deck of builders.
-
-    `_generate_typed` calls the factory ten times for one quiz, so
-    dealing (rather than drawing with replacement) guarantees the ten
-    questions spread across every shape this tier offers before any
-    shape repeats.
-    """
-    deck: list[Callable] = []
-
-    def factory(rng: random.Random, lo: int, hi: int):
-        if not deck:
-            deck.extend(builders)
-            rng.shuffle(deck)
-        return deck.pop()(rng, lo, hi)
-
-    factory.tier = tier          # type: ignore[attr-defined]
-    factory.builders = builders  # type: ignore[attr-defined]
-    return factory
 
 
 # ---------- shape 1: one-sentence stories (K-1) ----------
