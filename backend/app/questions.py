@@ -18,10 +18,11 @@ from __future__ import annotations
 
 import random
 import re
-from math import gcd
-from typing import Callable
+from math import factorial, gcd
+from typing import Callable, NamedTuple
 
 from . import word_problems
+from .rotation import rotating
 from .models import AnswerKind, AnswerMode, Difficulty, Grade, MathType, QuestionInternal
 
 _MAX_ATTEMPTS = 200
@@ -631,20 +632,252 @@ def _round_to_ten(rng: random.Random, lo: int, hi: int):
     )
 
 
-def _make_comparison_basic(rng: random.Random, lo: int, hi: int):
-    return rng.choice([_cmp_symbol, _even_odd, _sequence_next])(rng, lo, hi)
+# ---------- comparing expressions, not just numbers ----------
+#
+# "Which is biggest: 3, 15, 24?" is a grade-2 question, and it was still
+# what grade 4 got. From grade 3 up, both sides of the comparison are
+# something to work out first: sums, then mixed operators where
+# precedence decides the answer, then powers and factorials where the
+# point is how fast each one grows.
+#
+# These factories set their own number ranges rather than using the
+# shared lo/hi — the tier they're selected for already encodes the level.
 
 
-def _make_comparison_intermediate(rng: random.Random, lo: int, hi: int):
-    return rng.choice(
-        [_cmp_symbol, _even_odd, _sequence_next, _cmp_biggest, _place_value]
-    )(rng, lo, hi)
+class _Expr(NamedTuple):
+    text: str
+    value: int
 
 
-def _make_comparison_advanced(rng: random.Random, lo: int, hi: int):
-    return rng.choice(
-        [_cmp_symbol, _sequence_next, _cmp_biggest, _place_value, _round_to_ten]
-    )(rng, lo, hi)
+def _expr_sum(rng: random.Random, lo: int, hi: int, target: int | None = None) -> _Expr:
+    if target is not None:
+        low, high = max(lo, target - hi), min(hi, target - lo)
+        if low <= high:
+            a = rng.randint(low, high)
+            return _Expr(f"{a} + {target - a}", target)
+    a, b = rng.randint(lo, hi), rng.randint(lo, hi)
+    return _Expr(f"{a} + {b}", a + b)
+
+
+def _expr_mul_add(rng: random.Random, target: int | None = None) -> _Expr | None:
+    """`x × y + z`, written either way round so precedence always matters."""
+    for _ in range(40):
+        x, y = rng.randint(2, 12), rng.randint(2, 12)
+        product = x * y
+        if target is None:
+            z = rng.randint(2, 40)
+        else:
+            z = target - product
+            if not 1 <= z <= 60:
+                continue
+        text = f"{x} × {y} + {z}" if rng.random() < 0.5 else f"{z} + {x} × {y}"
+        return _Expr(text, product + z)
+    return None
+
+
+def _expr_brackets(rng: random.Random) -> _Expr:
+    a, b = rng.randint(3, 20), rng.randint(2, 15)
+    m = rng.randint(2, 9)
+    return _Expr(f"({a} + {b}) × {m}", (a + b) * m)
+
+
+# (base, exponent) pairs that stay under 10,000 — big enough to make the
+# point, small enough that a kid can actually work them out.
+_POWERS = [
+    (b, e) for b in range(2, 10) for e in range(2, 7) if 16 <= b ** e <= 10_000
+]
+# Different-looking powers that are secretly equal, so "=" can happen.
+_EQUAL_POWERS = [((2, 4), (4, 2)), ((2, 6), (8, 2)), ((3, 4), (9, 2)),
+                 ((2, 9), (8, 3)), ((2, 10), (4, 5)), ((3, 6), (9, 3))]
+
+
+def _expr_power(rng: random.Random) -> _Expr:
+    base, exp = rng.choice(_POWERS)
+    return _Expr(f"{base}^{exp}", base ** exp)
+
+
+def _expr_factorial(rng: random.Random) -> _Expr:
+    n = rng.randint(4, 8)
+    return _Expr(f"{n}!", factorial(n))
+
+
+_POWER_REMINDER = "Reminder: 4^3 means 4 × 4 × 4."
+_FACTORIAL_REMINDER = "Reminder: 5! means 5 × 4 × 3 × 2 × 1."
+
+
+def _compare(rng: random.Random, left: _Expr, right: _Expr, tag: str, reminder: str | None = None):
+    """Build a "write <, > or =" question from two worked-out sides.
+
+    Which side goes first is a coin flip, so no builder can skew the
+    answer — a kid guessing "<" every time shouldn't beat the odds.
+    """
+    if rng.random() < 0.5:
+        left, right = right, left
+    answer = "<" if left.value < right.value else (">" if left.value > right.value else "=")
+    text = "\n\n".join(filter(None, [
+        reminder,
+        "Write <, > or = in the blank:",
+        f"{left.text} _ {right.text}",
+    ]))
+    explanation = (
+        f"{left.text} = {left.value} and {right.text} = {right.value}, "
+        f"so {left.text} {answer} {right.text}. ⚖️"
+    )
+    return (tag, left.text, right.text), text, answer, explanation
+
+
+def _cmp_sums(rng: random.Random, lo: int, hi: int):
+    """Grade 3: still only +, but both sides need adding up first."""
+    left = _expr_sum(rng, 12, 99)
+    right = (
+        _expr_sum(rng, 12, 99, target=left.value)
+        if rng.random() < 0.2
+        else _expr_sum(rng, 12, 99)
+    )
+    return _compare(rng, left, right, "cmpsum")
+
+
+def _cmp_sum_biggest(rng: random.Random, lo: int, hi: int):
+    """Three sums to work out before you can pick the biggest."""
+    exprs: list[_Expr] = []
+    while len(exprs) < 3:
+        candidate = _expr_sum(rng, 12, 99)
+        if all(candidate.value != e.value for e in exprs):
+            exprs.append(candidate)
+    best = max(exprs, key=lambda e: e.value)
+    joined = ", ".join(e.text for e in exprs[:-1]) + f", or {exprs[-1].text}"
+    workings = ", ".join(f"{e.text} = {e.value}" for e in exprs)
+    return (
+        ("cmpsumbig", tuple(sorted(e.text for e in exprs))),
+        f"Which one is the biggest: {joined}?\n\nWrite the answer as a number.",
+        best.value,
+        f"{workings}. The biggest is {best.value}! ⚖️",
+    )
+
+
+def _cmp_expr_biggest(rng: random.Random, lo: int, hi: int):
+    """Three mixed-operator expressions — work them all out, then pick."""
+    exprs: list[_Expr] = []
+    guard = 0
+    while len(exprs) < 3 and guard < 60:
+        guard += 1
+        candidate = rng.choice([_expr_mul_add, lambda r: _expr_brackets(r)])(rng)
+        if candidate and all(candidate.value != e.value for e in exprs):
+            exprs.append(candidate)
+    if len(exprs) < 3:
+        return _cmp_sum_biggest(rng, lo, hi)
+    best = max(exprs, key=lambda e: e.value)
+    joined = ", ".join(e.text for e in exprs[:-1]) + f", or {exprs[-1].text}"
+    workings = ", ".join(f"{e.text} = {e.value}" for e in exprs)
+    return (
+        ("cmpexprbig", tuple(sorted(e.text for e in exprs))),
+        f"Which one is the biggest: {joined}?\n\nWrite the answer as a number.",
+        best.value,
+        f"{workings}. The biggest is {best.value}! ⚖️",
+    )
+
+
+def _sequence_doubling(rng: random.Random, lo: int, hi: int):
+    """A sequence that multiplies instead of adding."""
+    start = rng.randint(2, 9)
+    step = rng.choice([2, 3])
+    terms = [start * step ** i for i in range(4)]
+    return (
+        ("seqmul", start, step),
+        "What number comes next: " + ", ".join(str(t) for t in terms) + ", ?",
+        terms[-1] * step,
+        f"Each number is {step} times the one before: {terms[-1]} × {step} = {terms[-1] * step}! 🔁",
+    )
+
+
+def _round_to_hundred(rng: random.Random, lo: int, hi: int):
+    n = rng.randint(150, 9_499)
+    if n % 100 == 0:
+        n += rng.randint(1, 99)
+    answer = ((n + 50) // 100) * 100
+    return (
+        ("round100", n),
+        f"Round {n} to the nearest 100.",
+        answer,
+        f"{n} is closest to {answer}. Look at the tens digit: 5 or more rounds up! 🎯",
+    )
+
+
+def _cmp_big_sums(rng: random.Random, lo: int, hi: int):
+    """Grade 4: the same idea with numbers worth lining up carefully."""
+    left = _expr_sum(rng, 120, 999)
+    right = (
+        _expr_sum(rng, 120, 999, target=left.value)
+        if rng.random() < 0.2
+        else _expr_sum(rng, 120, 999)
+    )
+    return _compare(rng, left, right, "cmpbigsum")
+
+
+def _cmp_mixed_ops(rng: random.Random, lo: int, hi: int):
+    """Grade 4: × and + on both sides — precedence decides the answer."""
+    left = _expr_mul_add(rng)
+    if left is None:
+        return _cmp_sums(rng, lo, hi)
+    right = _expr_mul_add(rng, target=left.value) if rng.random() < 0.2 else _expr_mul_add(rng)
+    if right is None:
+        right = _expr_mul_add(rng)
+    return _compare(rng, left, right, "cmpops")
+
+
+def _cmp_brackets(rng: random.Random, lo: int, hi: int):
+    """Grade 5: brackets against plain precedence."""
+    left = _expr_brackets(rng)
+    right = _expr_mul_add(rng) or _expr_sum(rng, 20, 99)
+    return _compare(rng, left, right, "cmpbrackets")
+
+
+def _cmp_powers(rng: random.Random, lo: int, hi: int):
+    """Grade 5: 4^5 against 5^4 — same digits, very different answers."""
+    if rng.random() < 0.2:
+        (b1, e1), (b2, e2) = rng.choice(_EQUAL_POWERS)
+    else:
+        (b1, e1), (b2, e2) = rng.sample(_POWERS, 2)
+    left, right = _Expr(f"{b1}^{e1}", b1 ** e1), _Expr(f"{b2}^{e2}", b2 ** e2)
+    return _compare(rng, left, right, "cmppow", _POWER_REMINDER)
+
+
+def _cmp_factorial(rng: random.Random, lo: int, hi: int):
+    """Grade 5: how a factorial outruns a power."""
+    left = _expr_factorial(rng)
+    right = _expr_power(rng)
+    reminder = "Reminder: 5! means 5 × 4 × 3 × 2 × 1, and 4^3 means 4 × 4 × 4."
+    return _compare(rng, left, right, "cmpfact", reminder)
+
+
+_COMPARISON_TIERS = {
+    # Numbers on their own while that's the skill...
+    "basic": (_cmp_symbol, _even_odd, _sequence_next),
+    "numbers": (_cmp_symbol, _even_odd, _sequence_next, _cmp_biggest, _place_value),
+    # ...then both sides of the comparison become something to work out.
+    "sums": (_cmp_sums, _cmp_sum_biggest, _sequence_next, _place_value, _round_to_ten),
+    "operators": (
+        _cmp_mixed_ops, _cmp_big_sums, _cmp_expr_biggest,
+        _sequence_doubling, _round_to_hundred,
+    ),
+    "powers": (
+        _cmp_powers, _cmp_factorial, _cmp_brackets,
+        _cmp_mixed_ops, _cmp_expr_biggest, _sequence_doubling,
+    ),
+}
+
+
+def _comparison_tier(difficulty: Difficulty, g: int) -> str:
+    """Numbers alone until grade 3, then expressions on both sides."""
+    if g >= 5 and difficulty != Difficulty.easy:
+        return "powers"
+    if g >= 4 or (g >= 3 and difficulty == Difficulty.hard) or g >= 5:
+        return "operators"
+    if g >= 3:
+        return "sums"
+    if g >= 2 and difficulty != Difficulty.easy:
+        return "numbers"
+    return "basic"
 
 
 # ---------- money & time ----------
@@ -1241,11 +1474,8 @@ def _pick_factory(math_type: MathType, difficulty: Difficulty, grade: Grade) -> 
         return word_problems.tier_factory(_word_problem_tier(difficulty, g))
 
     if math_type == MathType.comparison:
-        if difficulty == Difficulty.hard and g >= 3:
-            return _make_comparison_advanced
-        if g >= 2 and difficulty != Difficulty.easy:
-            return _make_comparison_intermediate
-        return _make_comparison_basic
+        tier = _comparison_tier(difficulty, g)
+        return rotating(_COMPARISON_TIERS[tier], tier)
 
     if math_type == MathType.money_time:
         if difficulty == Difficulty.hard and g >= 3:
@@ -1492,6 +1722,9 @@ def _parse_number(s: str) -> float | None:
 _BASE_QUESTION_SECONDS = 15
 _FREE_WORDS = 25
 _MAX_QUESTION_SECONDS = 120
+_HEAVY_OP_SECONDS = 10
+# Powers and factorials only — the operators a kid has to grind out.
+_HEAVY_OPS = re.compile(r"\d\^\d|\d!")
 
 
 def time_limit_seconds(text: str) -> int:
@@ -1504,9 +1737,17 @@ def time_limit_seconds(text: str) -> int:
     that, roughly a second per extra word covers the reading.
     """
     words = len(text.split())
-    if words <= _FREE_WORDS:
-        return _BASE_QUESTION_SECONDS
-    return min(_MAX_QUESTION_SECONDS, _BASE_QUESTION_SECONDS + words - _FREE_WORDS)
+    seconds = _BASE_QUESTION_SECONDS + max(0, words - _FREE_WORDS)
+    # Reading isn't the only cost. A power or a factorial is short to read
+    # and slow to work out — "9^4 _ 7!" is eight characters and two real
+    # calculations — so each one buys its own thinking time. The reminder
+    # line explaining the notation doesn't count: nothing there is worked
+    # out, and counting it would pay twice for the same question.
+    body = "\n".join(
+        line for line in text.splitlines() if not line.startswith("Reminder:")
+    )
+    seconds += _HEAVY_OP_SECONDS * len(_HEAVY_OPS.findall(body))
+    return min(_MAX_QUESTION_SECONDS, seconds)
 
 
 def answer_kind(correct: int | str) -> AnswerKind:

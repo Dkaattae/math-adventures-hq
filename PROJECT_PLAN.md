@@ -1,6 +1,6 @@
 # Math Adventures HQ — Project Plan
 
-_Last updated: 2026-07-28_
+_Last updated: 2026-07-29_
 
 This document collects the roadmap for expanding the quiz, the known bugs
 and rough edges found while auditing the codebase, the testing gaps, and
@@ -13,6 +13,12 @@ Completed work moves to the **Done** section at the bottom.
 
 ### Long term
 
+- **Give the remaining topics the same treatment.** Word problems
+  (2026-07-28) and comparison (2026-07-29) were rebuilt around question
+  *shapes* that grow with the grade. Measurement, money & time and
+  percentages are still one-line templates whose difficulty is only the
+  size of the numbers — the same "a grade-5 question should not be a
+  grade-2 question with bigger digits" critique applies to them.
 - Printable worksheet export (the generators already produce clean
   question/answer pairs).
 - Practice mode (untimed) vs. challenge mode (streaks; the `badge` field
@@ -66,8 +72,10 @@ findings, ordered by impact:
   independently re-evaluate the generated question text and assert it
   equals `correctAnswer` (catches template/answer drift — the class of bug
   most likely to sneak in as factories multiply). `hypothesis` fits well.
-  (Regex-based recomputation tests exist for the six newest types; the
-  original arithmetic types and a property-based framework are still open.)
+  (Regex-based recomputation exists for the six newest types, and
+  `test_comparison.py` now evaluates every generated expression with a
+  separate implementation. The original arithmetic types and a
+  property-based framework are still open.)
 - **Leaderboard tie-breaking** — score-desc/time-asc ordering is only
   partially covered.
 - **Double-submit race** — the `submitted` flag is checked and set in
@@ -106,11 +114,13 @@ findings, ordered by impact:
   and each user's quiz history (via `query_user_stats`). Consider a
   dedicated history/attempts table, or rename to reflect that it's an
   attempts log the leaderboard reads from.
-- **Split `questions.py`** (~1400 lines) into a package:
+- **Split `questions.py`** (~1700 lines and still growing — the
+  comparison expressions added ~200) into a package:
   `questions/arithmetic.py`, `fractions.py`, `order_of_ops.py`,
-  `geometry_data.py`, `distractors.py`, etc., behind the same
-  `generate_questions` facade. Word problems already moved out to
-  `word_problems.py` (2026-07-28) — that split is the template.
+  `comparison.py`, `geometry_data.py`, `distractors.py`, etc., behind
+  the same `generate_questions` facade. `word_problems.py` and
+  `rotation.py` are already out and show the shape of it; comparison is
+  the obvious next one to lift.
 - **Tune difficulty scaling per topic.** `_difficulty_range` is linear in
   grade for every type; multiplication should probably cap factors near
   12 (times tables) regardless of range, and fractions difficulty is
@@ -131,6 +141,39 @@ findings, ordered by impact:
 ## Done
 
 Completed items, newest first.
+
+### 2026-07-29 — comparison compares expressions, not just numbers
+
+- **Grade 4 was still being asked "which is biggest: 3, 15, 24?"** — a
+  grade-2 question. The topic now has five tiers: plain numbers at K-2,
+  then from grade 3 both sides of the blank are something to work out
+  first.
+  - **Grade 3** keeps to `+` but on both sides: `14 + 63 _ 49 + 19`,
+    plus "which of these three sums is biggest?".
+  - **Grade 4** brings in more operators, so precedence decides the
+    answer: `19 + 10 × 7 _ 3 + 6 × 5`. Rounding moves to the nearest
+    100, sequences start multiplying (`3, 6, 12, 24, ?`), and the
+    biggest-of-three question uses expressions rather than two-digit
+    sums.
+  - **Grade 5** adds powers, factorials and brackets: `9^4 _ 7!`,
+    `2^9 _ 8^3`, `(5 + 14) × 8 _ 15 + 3 × 6`. Both notations come with a
+    reminder of what they mean, the same way the word-problem scoring
+    scenes state their rules — a fifth grader may never have seen `!`.
+    Powers are capped at 10,000 so they stay workable by hand, and a
+    handful of secretly-equal pairs (`2^4` / `4^2`) keep `=` reachable.
+- **Guessing doesn't pay.** Which side of the comparison goes first is a
+  coin flip inside the shared builder, so `<` and `>` each land ~40% of
+  the time with `=` making up the rest — measured, and asserted in the
+  tests.
+- **Shape rotation is now shared.** `app/rotation.py` holds the
+  deal-from-a-shuffled-deck helper that word problems introduced; both
+  topics use it, so a comparison quiz also covers every shape its tier
+  offers before repeating one.
+- **Answers are re-derived in the tests.** `test_comparison.py` parses
+  each generated expression and evaluates it with a separate
+  implementation, so a precedence or factorial bug can't cancel itself
+  out — the property-based verification §4 asks for, applied to this
+  topic.
 
 ### 2026-07-28 — word problems became word problems
 

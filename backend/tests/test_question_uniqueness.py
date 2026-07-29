@@ -479,15 +479,20 @@ def test_word_problem_answers_match_the_story():
 
 
 def test_comparison_symbol_answers_are_correct():
+    """Plain number-vs-number comparison lives at K-2 now; grade 3 and up
+    compare expressions instead (see test_comparison.py)."""
+    saw = False
     for seed in range(20):
         rng = random.Random(seed)
-        qs = generate_questions(MathType.comparison, Difficulty.medium, Grade.G3, rng=rng)
+        qs = generate_questions(MathType.comparison, Difficulty.easy, Grade.G1, rng=rng)
         for q in qs:
             m = re.match(r"^Fill in the blank: (\d+) _ (\d+)", q.question)
             if m:
+                saw = True
                 a, b = int(m.group(1)), int(m.group(2))
                 expected = "<" if a < b else (">" if a > b else "=")
                 assert q.correctAnswer == expected, q.question
+    assert saw, "G1 comparison never produced a plain number comparison"
 
 
 def test_comparison_rounding_only_at_grade3_hard():
@@ -508,14 +513,22 @@ def test_comparison_rounding_only_at_grade3_hard():
 
 
 def test_comparison_rounding_answers_are_correct():
+    """Nearest 10 at grade 3, nearest 100 once the numbers grow."""
+    saw_ten = saw_hundred = False
     for seed in range(30):
-        rng = random.Random(seed)
-        qs = generate_questions(MathType.comparison, Difficulty.hard, Grade.G5, rng=rng)
-        for q in qs:
-            m = re.match(r"^Round (\d+) to the nearest 10\.", q.question)
-            if m:
-                n = int(m.group(1))
-                assert q.correctAnswer == ((n + 5) // 10) * 10, q.question
+        for grade, difficulty in [
+            (Grade.G3, Difficulty.medium), (Grade.G4, Difficulty.medium)
+        ]:
+            rng = random.Random(seed)
+            for q in generate_questions(MathType.comparison, difficulty, grade, rng=rng):
+                m = re.match(r"^Round (\d+) to the nearest (10|100)\.", q.question)
+                if not m:
+                    continue
+                n, place = int(m.group(1)), int(m.group(2))
+                assert q.correctAnswer == ((n + place // 2) // place) * place, q.question
+                saw_ten |= place == 10
+                saw_hundred |= place == 100
+    assert saw_ten and saw_hundred
 
 
 # ---------- money & time ----------

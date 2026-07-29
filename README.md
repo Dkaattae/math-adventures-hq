@@ -37,6 +37,13 @@ leaderboard.
   - **short stories** for K–1, where the reading is the hard part
   Scene-setting noise appears only *sometimes*, so "ignore the last
   sentence" never becomes the trick.
+- **Comparison that grows up**: K–2 compares plain numbers, but from
+  grade 3 both sides of the blank are something to work out first —
+  `14 + 63 _ 49 + 19` at grade 3 (still only `+`), then mixed operators
+  where precedence decides it (`19 + 10 × 7 _ 3 + 6 × 5`), then powers,
+  factorials and brackets at grade 5 (`9^4 _ 7!`, with a reminder of
+  what `!` and `^` mean). Which side goes first is a coin flip, so
+  guessing `<` every time never pays.
 - **Grade-appropriate topics**: the setup screen only offers topics that
   fit the chosen grade (no long division for Kindergarteners), and the
   🎲 Mixed quiz samples only from unlocked topics.
@@ -106,6 +113,7 @@ leaderboard.
 │       ├── models.py        # Pydantic schemas (match openapi.yaml)
 │       ├── questions.py     # per-type question generators + dedup
 │       ├── word_problems.py # real-life scenes for the word problems
+│       ├── rotation.py     # deal question shapes from a shuffled deck
 │       ├── storage.py       # DB-backed repository
 │       └── routers/         # users / quizzes / leaderboard
 ├── Dockerfile         # multi-stage: vite build -> python runtime
