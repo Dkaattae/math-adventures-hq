@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import Leaderboard from "@/components/Leaderboard";
 import * as api from "@/lib/api";
@@ -60,5 +60,54 @@ describe("Leaderboard filters", () => {
     await waitFor(() =>
       expect(screen.getByText(/No scores here yet/)).toBeInTheDocument(),
     );
+  });
+});
+
+// PROJECT_PLAN §3.1: unfiltered, "10/10 — 1m 20s" says nothing about
+// whether it was K easy or grade 5 hard, which made the whole board look
+// like one race. Each row now carries the level it was set at.
+describe("Leaderboard row context", () => {
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
+
+  // Scoped to the row: the filter dropdowns hold "Hard" and "Grade 3"
+  // too, and a document-wide query would pass on those alone.
+  const row = async () => {
+    await waitFor(() => expect(screen.getByText("Emma")).toBeInTheDocument());
+    return within(screen.getAllByRole("listitem")[0]);
+  };
+
+  it("labels each row with its grade, topic and difficulty", async () => {
+    vi.spyOn(api, "getLeaderboard").mockResolvedValue([
+      { ...sampleEntry, grade: "3", mathType: "fractions", difficulty: "hard" },
+    ] as never);
+    renderLeaderboard();
+
+    const r = await row();
+    expect(r.getByText("G3")).toBeInTheDocument();
+    expect(r.getByText(/Fractions/)).toBeInTheDocument();
+    expect(r.getByText("Hard")).toBeInTheDocument();
+  });
+
+  it("writes kindergarten as K, not G K", async () => {
+    vi.spyOn(api, "getLeaderboard").mockResolvedValue([
+      { ...sampleEntry, grade: "K", mathType: "addition", difficulty: "easy" },
+    ] as never);
+    renderLeaderboard();
+
+    const r = await row();
+    expect(r.getByText("K")).toBeInTheDocument();
+    expect(r.queryByText("GK")).toBeNull();
+  });
+
+  it("leaves rows from before these columns existed unlabelled", async () => {
+    vi.spyOn(api, "getLeaderboard").mockResolvedValue([sampleEntry] as never);
+    renderLeaderboard();
+
+    const r = await row();
+    expect(r.queryByText("Hard")).toBeNull();
+    expect(r.queryByText(/^G\d$/)).toBeNull();
   });
 });

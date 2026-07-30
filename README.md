@@ -73,7 +73,9 @@ leaderboard.
   dot strip shows which questions are answered and jumps anywhere; Back
   and Next keep your typed answer, and finishing with blanks asks first.
   The last 30 seconds are flagged in colour *and* words before the quiz
-  auto-submits.
+  auto-submits. A quiz can also be left: the `✕` beside the timer asks to
+  confirm and then discards the attempt — nothing is submitted, so a
+  wrong-level start never lands on the leaderboard.
 - **Right keyboard on phones**: each question reports whether its answer
   is a whole number, a decimal, or free text, so numeric questions bring
   up a keypad while fractions, `<`/`>` and word answers keep the full
@@ -101,7 +103,10 @@ leaderboard.
   right or obtuse?" — the angle is drawn, not named); grades 4–5 compute
   perimeter and area from a rectangle with labelled sides.
 - **Leaderboard**: score + time ranking with Grade / Topic / Level
-  filters right on the home screen.
+  filters right on the home screen, and each row labelled with the level
+  it was set at (`G3` · `🍕 Fractions` · `Hard`). Ties on both score and
+  time go to whoever got there first, so a rank can't be taken by a run
+  that merely matches it.
 - **Kid-friendly explanations**: every question carries a short "here's
   how" hint with the graded results.
 

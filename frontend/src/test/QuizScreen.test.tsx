@@ -37,7 +37,7 @@ describe("QuizScreen timers", () => {
 
   it("keeps the total countdown running while the player types", async () => {
     const onFinish = vi.fn();
-    render(<QuizScreen questions={questions} onFinish={onFinish} />);
+    render(<QuizScreen questions={questions} onFinish={onFinish} onQuit={vi.fn()} />);
 
     const input = screen.getByPlaceholderText("Your answer...");
     // Type a keystroke every 400ms for 8 seconds — faster than the old
@@ -52,7 +52,7 @@ describe("QuizScreen timers", () => {
   });
 
   it("advances to the next question when the per-question timer expires", async () => {
-    render(<QuizScreen questions={questions} onFinish={vi.fn()} />);
+    render(<QuizScreen questions={questions} onFinish={vi.fn()} onQuit={vi.fn()} />);
 
     expect(screen.getByText("Question 1 of 10")).toBeInTheDocument();
     await act(() => vi.advanceTimersByTimeAsync(15_500));
@@ -61,7 +61,7 @@ describe("QuizScreen timers", () => {
 
   it("keeps a typed-but-unsubmitted answer when the question timer expires", async () => {
     const onFinish = vi.fn();
-    render(<QuizScreen questions={questions} onFinish={onFinish} />);
+    render(<QuizScreen questions={questions} onFinish={onFinish} onQuit={vi.fn()} />);
 
     const input = screen.getByPlaceholderText("Your answer...");
     fireEvent.change(input, { target: { value: "42" } });
@@ -75,7 +75,7 @@ describe("QuizScreen timers", () => {
 
   it("finishes the quiz when the timer expires on the last question", async () => {
     const onFinish = vi.fn();
-    render(<QuizScreen questions={questions} onFinish={onFinish} />);
+    render(<QuizScreen questions={questions} onFinish={onFinish} onQuit={vi.fn()} />);
 
     // Jump to the last question via the dot strip.
     fireEvent.click(screen.getByRole("button", { name: /Question 10, blank/ }));
@@ -91,7 +91,7 @@ describe("QuizScreen timers", () => {
 
   it("finishes exactly once when the total time runs out", async () => {
     const onFinish = vi.fn();
-    render(<QuizScreen questions={questions} onFinish={onFinish} />);
+    render(<QuizScreen questions={questions} onFinish={onFinish} onQuit={vi.fn()} />);
 
     await act(() => vi.advanceTimersByTimeAsync(181_000));
     expect(onFinish).toHaveBeenCalledTimes(1);

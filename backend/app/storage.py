@@ -346,9 +346,18 @@ def query_leaderboard(
         stmt = stmt.where(LeaderboardRow.difficulty == difficulty.value)
     if grade is not None:
         stmt = stmt.where(LeaderboardRow.grade == grade.value)
-    stmt = stmt.order_by(LeaderboardRow.score.desc(), LeaderboardRow.time_used_seconds.asc()).limit(
-        limit
-    )
+    # Score first, then the faster run. Two runs can tie on both (10/10
+    # in 45s is common at easy), and without a third key the winner is
+    # whatever the database felt like returning — which also makes the
+    # `limit` cut arbitrary. Earliest achievement takes the higher rank:
+    # it's stable, and it means an existing row can't be demoted by
+    # someone matching it later.
+    stmt = stmt.order_by(
+        LeaderboardRow.score.desc(),
+        LeaderboardRow.time_used_seconds.asc(),
+        LeaderboardRow.achieved_at.asc(),
+        LeaderboardRow.id.asc(),
+    ).limit(limit)
     rows = db.scalars(stmt).all()
     return [
         LeaderboardEntry(

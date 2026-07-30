@@ -37,14 +37,14 @@ describe("QuizScreen total-time warning", () => {
   });
 
   it("stays quiet while there's plenty of time", async () => {
-    render(<QuizScreen questions={questions()} onFinish={vi.fn()} />);
+    render(<QuizScreen questions={questions()} onFinish={vi.fn()} onQuit={vi.fn()} />);
     await act(() => vi.advanceTimersByTimeAsync(60_000)); // 2:00 left
     expect(warning()).toBeNull();
     expect(screen.getByText(/2:00 left/)).toBeInTheDocument();
   });
 
   it("warns in words for the last 30 seconds", async () => {
-    render(<QuizScreen questions={questions()} onFinish={vi.fn()} />);
+    render(<QuizScreen questions={questions()} onFinish={vi.fn()} onQuit={vi.fn()} />);
     await act(() => vi.advanceTimersByTimeAsync(150_000)); // 0:30 left
 
     const alert = warning();
@@ -56,7 +56,7 @@ describe("QuizScreen total-time warning", () => {
 
   it("still auto-submits when the clock runs out", async () => {
     const onFinish = vi.fn();
-    render(<QuizScreen questions={questions()} onFinish={onFinish} />);
+    render(<QuizScreen questions={questions()} onFinish={onFinish} onQuit={vi.fn()} />);
     await act(() => vi.advanceTimersByTimeAsync(181_000));
     expect(onFinish).toHaveBeenCalledTimes(1);
   });
@@ -74,17 +74,17 @@ describe("QuizScreen answer keyboard", () => {
     ["decimal", "decimal"],
     ["text", "text"],
   ] as const)("asks for the %s keypad", (answerKind, expected) => {
-    render(<QuizScreen questions={questions({ answerKind })} onFinish={vi.fn()} />);
+    render(<QuizScreen questions={questions({ answerKind })} onFinish={vi.fn()} onQuit={vi.fn()} />);
     expect(input()).toHaveAttribute("inputmode", expected);
   });
 
   it("falls back to the full keyboard when the server sends no kind", () => {
-    render(<QuizScreen questions={questions()} onFinish={vi.fn()} />);
+    render(<QuizScreen questions={questions()} onFinish={vi.fn()} onQuit={vi.fn()} />);
     expect(input()).toHaveAttribute("inputmode", "text");
   });
 
   it("keeps type=text so fractions and '<' can still be typed", () => {
-    render(<QuizScreen questions={questions({ answerKind: "integer" })} onFinish={vi.fn()} />);
+    render(<QuizScreen questions={questions({ answerKind: "integer" })} onFinish={vi.fn()} onQuit={vi.fn()} />);
     expect(input()).toHaveAttribute("type", "text");
   });
 });

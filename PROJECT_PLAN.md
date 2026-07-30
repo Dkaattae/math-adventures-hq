@@ -46,21 +46,18 @@ audit is worth running once §3 is cleared.
 A front-end-focused pass, prompted by "the quiz has too many buttons and
 I'm not sure what to click." The quiz controls redesign and failed-submit
 retry shipped 2026-07-19; the total-time warning, mobile keyboard and
-setup-screen Start button shipped 2026-07-24 (see Done). Remaining
-findings, ordered by impact:
+setup-screen Start button shipped 2026-07-24; the leaderboard row chips
+and the quiz exit shipped 2026-07-30 (see Done). Remaining findings,
+ordered by impact:
 
-1. **Leaderboard rows hide their context.** Unfiltered, a "10/10 —
-   1m 20s" row doesn't say it was K-easy vs G5-hard. Add small
-   grade/topic chips per row.
-2. **Rescue-code interstitial has no copy button.** A parent can't tap
+1. **Rescue-code interstitial has no copy button.** A parent can't tap
    to copy `gold-otter-731` into their notes app.
-3. **Accessibility pass needed.** The dot strip ships with aria-labels
-   and the two timer warnings now say their state in words, but the
-   rest of the app deserves a keyboard-only + screen-reader once-over
-   (buttons lean on emoji; focus order is unverified).
-4. **No way out of a quiz.** Once started, the only exits are Finish
-   (which submits) or waiting out the clock. Consider a small "quit"
-   with confirmation that discards the attempt.
+2. **Accessibility pass needed.** The dot strip ships with aria-labels,
+   the two timer warnings say their state in words, and the quit dialog
+   is a labelled `role="dialog"`, but the rest of the app deserves a
+   keyboard-only + screen-reader once-over (buttons lean on emoji; focus
+   order is unverified, and the quit dialog doesn't trap focus or close
+   on Escape).
 
 ---
 
@@ -72,16 +69,17 @@ findings, ordered by impact:
   `generate_questions()` directly; only `addition` is exercised through
   `POST /api/quizzes` → submit. Add a parametrized round-trip test across
   all fourteen `MathType`s.
-- **Property-based answer verification.** For every arithmetic factory,
-  independently re-evaluate the generated question text and assert it
-  equals `correctAnswer` (catches template/answer drift — the class of bug
-  most likely to sneak in as factories multiply). `hypothesis` fits well.
-  (Regex-based recomputation exists for the six newest types, and
-  `test_comparison.py` now evaluates every generated expression with a
-  separate implementation. The original arithmetic types and a
-  property-based framework are still open.)
-- **Leaderboard tie-breaking** — score-desc/time-asc ordering is only
-  partially covered.
+- ~~**Property-based answer verification**~~ — done 2026-07-30. Every
+  question printed by the eight arithmetic topics is parsed and re-solved
+  by `test_answer_verification.py`, which shares no code with the
+  generators (precedence comes from Python's own `ast`). What's left is
+  the topics that can't be re-solved from text alone — word problems,
+  measurement, money & time, percentages — which keep their existing
+  per-shape recomputation instead.
+- ~~**Leaderboard tie-breaking**~~ — done 2026-07-30, and it needed a fix
+  as well as tests: ordering had no third key, so rows tied on score
+  *and* time came back in whatever order the database chose. Earliest
+  achievement now wins the tie.
 - **Double-submit race** — the `submitted` flag is checked and set in
   separate steps; two concurrent submits can both pass the check. Needs a
   row-level guard (e.g. conditional UPDATE) and a test.
@@ -89,7 +87,7 @@ findings, ordered by impact:
 ### Frontend
 
 - **More component tests** — QuizScreen timers/MC/navigation (dot strip,
-  draft-saving Back/Next, blank-check confirm), UsernameScreen PIN flow,
+  draft-saving Back/Next, blank-check confirm, quit), UsernameScreen PIN flow,
   Index submit-retry, session-token handling in the API client, the
   total-time warning and per-question `inputMode`, the setup screen's
   Start/nudge states, Leaderboard filters, ProgressScreen, and
@@ -137,7 +135,7 @@ findings, ordered by impact:
 
 | Phase | Items | Why first |
 |---|---|---|
-| 1 — polish | §3 findings 1–4 (leaderboard chips, rescue-code copy button, a11y pass, quiz quit) | Small, self-contained UX wins; the app is now functionally and structurally sound |
+| 1 — polish | §3 findings 1–2 (rescue-code copy button, a11y pass) | Small, self-contained UX wins; the app is now functionally and structurally sound |
 | 2 — depth | Worksheet export; practice vs. challenge mode; more visual questions (§1) | Additive features on a solid base |
 | 3 — internals | Generated API types, `questions.py` split, attempts-table rename, per-topic difficulty tuning (§5) | Pay down as the library keeps growing |
 
@@ -146,6 +144,48 @@ findings, ordered by impact:
 ## Done
 
 Completed items, newest first.
+
+### 2026-07-30 — leaderboard context, a way out of a quiz, and answers checked twice
+
+- **Every leaderboard row says what level it was set at** (§3.1). A row
+  read "🏆 Emma — 10/10 — 1m 20s", which is only meaningful if you know
+  whether that was kindergarten easy or grade 5 hard, and with the
+  filters set to All it was every level at once. Each row now carries
+  small chips — `G3` · `🍕 Fractions` · `Hard` — and rows written before
+  those columns existed simply show none. The list is a real `<ul>`/`<li>`
+  now, which is also what lets the tests read one row at a time.
+- **A quiz can be left** (§3.4). Finish (which submits) and the expiring
+  clock were the only exits, so picking the wrong grade meant sitting
+  through ten questions you couldn't read — or deliberately tanking a
+  score that then landed on the leaderboard. A quiet `✕` beside the
+  timer asks "Leave this quiz? Your answers won't be saved and this quiz
+  won't count", and leaving returns to setup still logged in. Nothing is
+  submitted, so the attempt never reaches history or the board. The
+  confirm sets the same latch `finish` uses, so a countdown that expires
+  on the way out can't submit the answers behind you.
+- **Every arithmetic question is now solved twice** (§4 testing gap).
+  `test_answer_verification.py` parses the question text the app
+  actually prints and re-solves it with Python's `ast` and exact
+  `Fraction` arithmetic — no shared code with the generators, so
+  precedence, sign and simplification all have to agree independently.
+  It covers addition, subtraction, multiplication, division, algebra
+  (by substituting the claimed x back into the equation), fractions,
+  order of operations and decimals — 6 grades × 3 difficulties × 12
+  seeds each, ~17k questions per run — plus the arithmetic that surfaces
+  in mixed quizzes. `test_no_question_escapes_the_checker`
+  fails if a new question shape appears that no checker can parse, so
+  the suite can't quietly go vacuous, and four small tests prove the
+  checker itself rejects wrong answers. Verified against an injected
+  PEMDAS bug — it fails, as it should.
+- **Leaderboard ties are no longer arbitrary** (§4 testing gap, and a fix
+  it turned up). Ordering was score-desc then time-asc with no third key;
+  10/10 in 45 seconds is common at easy, and rows tied on both came back
+  in whatever order the database chose — which also made the top-5 cut
+  non-deterministic. Earliest achievement now breaks the tie (row id as a
+  final key), so holding rank 1 can't be taken away by someone merely
+  matching it. `test_leaderboard_ordering.py` re-derives the expected
+  order with Python's own sort over seeded score/time pools where ties
+  are constant.
 
 ### 2026-07-30 — reading scales + visual geometry beyond shape ID
 

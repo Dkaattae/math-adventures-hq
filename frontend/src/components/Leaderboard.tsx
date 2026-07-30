@@ -69,9 +69,9 @@ const Leaderboard = () => {
           No scores here yet — be the first! 🚀
         </p>
       ) : (
-        <div className="space-y-2">
+        <ul className="space-y-2">
           {leaderboard.map((entry, i) => (
-            <motion.div
+            <motion.li
               key={`${entry.name}-${entry.achievedAt}`}
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
@@ -83,22 +83,46 @@ const Leaderboard = () => {
               }`}
             >
               <span className="text-2xl w-10 text-center">{entry.badge}</span>
-              <div className="flex-1">
+              <div className="flex-1 min-w-0">
                 <p className="font-heading font-semibold">{entry.name}</p>
                 <p className="text-sm text-muted-foreground">⏱ {entry.time}</p>
+                {/* Unfiltered, "10/10 — 1m 20s" says nothing about
+                    whether it was K-easy or G5-hard, so each row carries
+                    its own level. Only chips the row actually has: old
+                    rows predate these columns. */}
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {entry.grade && (
+                    <Chip>{entry.grade === "K" ? "K" : `G${entry.grade}`}</Chip>
+                  )}
+                  {entry.mathType && (
+                    <Chip>
+                      {mathTypeLabels[entry.mathType].emoji}{" "}
+                      {mathTypeLabels[entry.mathType].label}
+                    </Chip>
+                  )}
+                  {entry.difficulty && (
+                    <Chip>{difficultyConfig[entry.difficulty].label}</Chip>
+                  )}
+                </div>
               </div>
               <div className="text-right">
                 <p className="font-heading font-bold text-primary">
                   {entry.score}/{entry.total}
                 </p>
               </div>
-            </motion.div>
+            </motion.li>
           ))}
-        </div>
+        </ul>
       )}
     </motion.div>
   );
 };
+
+const Chip = ({ children }: { children: React.ReactNode }) => (
+  <span className="px-2 py-0.5 rounded-full bg-muted text-muted-foreground text-[11px] font-heading font-semibold whitespace-nowrap">
+    {children}
+  </span>
+);
 
 const FilterSelect = ({
   label, value, onChange, options,
