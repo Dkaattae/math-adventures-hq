@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import random
 from dataclasses import dataclass
+from functools import partial
 from typing import Callable
 
 from .rotation import rotating
@@ -50,6 +51,25 @@ NAMES = [
     "Marco", "Nina", "Tariq", "Sofia", "Jonas", "Aisha", "Bruno", "Elif", "Caleb", "Rosa",
     "Kai", "Dalia", "Milo", "Anya", "Idris", "Clara", "Nikhil", "Esme", "Theo", "Junko",
 ]
+
+
+# ---------- reading scales ----------
+#
+# A 2nd grader and a 4th grader used to get the same 4-6 line list; only
+# the arithmetic changed, the reading didn't. The maths level lives in
+# the tier; the *reading* level lives here. Grades 1-2 get a short list
+# with no scene-setting noise, grade 5 (above easy) gets a longer list
+# with an extra distractor zone. The templates are the same — each scale
+# just picks more or fewer items from the same scene.
+
+SCALES = {
+    "short": dict(target=(2, 2), other=(1, 2), third=False, facts=0,
+                  priced=(2, 3), rule_used=(2, 2), deal_rest=(1, 1)),
+    "standard": dict(target=(2, 3), other=(2, 3), third=False, facts=2,
+                     priced=(3, 4), rule_used=(2, 3), deal_rest=(1, 2)),
+    "long": dict(target=(3, 4), other=(2, 3), third=True, facts=2,
+                 priced=(4, 5), rule_used=(2, 3), deal_rest=(2, 3)),
+}
 
 
 # ---------- shared helpers ----------
@@ -67,17 +87,20 @@ def _cap(text: str) -> str:
     return text[:1].upper() + text[1:]
 
 
-def _noise(rng: random.Random, flavour, *, tax: bool = False, always=()) -> list[str]:
-    """Zero to two scene-setting facts, chosen at random.
+def _noise(rng: random.Random, flavour, *, tax: bool = False, always=(),
+           max_facts: int = 2) -> list[str]:
+    """Up to `max_facts` scene-setting facts, chosen at random.
 
     Deliberately not always present: if every question ended with a
     throwaway sentence, ignoring the last sentence would become the
-    trick. Sometimes there is nothing to ignore.
+    trick. Sometimes there is nothing to ignore — and at the "short"
+    reading scale (max_facts=0) there never is: a 1st grader gets the
+    numbers and the question, full stop.
     """
     out: list[str] = []
     roll = rng.random()
-    if flavour and roll < 0.7:
-        count = 2 if roll < 0.2 and len(flavour) > 1 else 1
+    if flavour and max_facts > 0 and roll < 0.7:
+        count = 2 if roll < 0.2 and len(flavour) > 1 and max_facts > 1 else 1
         out.extend(rng.sample(list(flavour), k=count))
     out.extend(always)
     if tax and rng.random() < 0.55:
@@ -115,7 +138,7 @@ _SIMPLE_ITEMS = [
 ]
 
 
-def simple_add(rng: random.Random, lo: int, hi: int):
+def simple_add(rng: random.Random, lo: int, hi: int, *, scale: str = "standard"):
     # The starting pile is always plural, so nothing reads "1 apples".
     a, b = rng.randint(2, max(3, hi)), rng.randint(lo, hi)
     name = rng.choice(NAMES)
@@ -133,7 +156,7 @@ def simple_add(rng: random.Random, lo: int, hi: int):
     )
 
 
-def simple_sub(rng: random.Random, lo: int, hi: int):
+def simple_sub(rng: random.Random, lo: int, hi: int, *, scale: str = "standard"):
     a = rng.randint(max(lo, 2), max(hi, 3))
     b = rng.randint(1, a)
     name = rng.choice(NAMES)
@@ -151,7 +174,7 @@ def simple_sub(rng: random.Random, lo: int, hi: int):
     )
 
 
-def simple_groups(rng: random.Random, lo: int, hi: int):
+def simple_groups(rng: random.Random, lo: int, hi: int, *, scale: str = "standard"):
     groups = rng.randint(2, max(3, hi // 3))
     each = rng.randint(2, max(3, hi // 2))
     item, _ = rng.choice(_SIMPLE_ITEMS)
@@ -166,7 +189,7 @@ def simple_groups(rng: random.Random, lo: int, hi: int):
     )
 
 
-def simple_share(rng: random.Random, lo: int, hi: int):
+def simple_share(rng: random.Random, lo: int, hi: int, *, scale: str = "standard"):
     friends = rng.randint(2, max(3, hi // 3))
     each = rng.randint(2, max(3, hi // 2))
     total = friends * each
@@ -464,33 +487,47 @@ def _count_lines(rng: random.Random, zone: Zone, count: int, hi: int):
     return [(item, rng.randint(2, max(3, min(9, hi)))) for item in chosen]
 
 
-def _list_scene(rng: random.Random, hi: int):
-    """Shared setup for every list question: a scene, two zones, lines."""
+def _list_scene(rng: random.Random, hi: int, scale: str):
+    """Shared setup for every list question: a scene, two zones, lines.
+
+    At the "long" scale a third zone joins the list purely as extra
+    sifting; its lines count as "not the target zone" but never appear
+    in the question's own comparison.
+    """
+    cfg = SCALES[scale]
     scene = rng.choice(COUNT_SCENES)
-    target, other = rng.sample(scene.zones, k=2)
+    zones = list(scene.zones)
+    rng.shuffle(zones)
+    target, other = zones[0], zones[1]
     name = rng.choice(NAMES)
-    target_lines = _count_lines(rng, target, rng.randint(2, 3), hi)
-    other_lines = _count_lines(rng, other, rng.randint(2, 3), hi)
-    all_lines = target_lines + other_lines
+    target_lines = _count_lines(rng, target, rng.randint(*cfg["target"]), hi)
+    other_lines = _count_lines(rng, other, rng.randint(*cfg["other"]), hi)
+    extra_lines = (
+        _count_lines(rng, zones[2], rng.randint(2, 3), hi)
+        if cfg["third"] and len(zones) > 2
+        else []
+    )
+    all_lines = target_lines + other_lines + extra_lines
     rng.shuffle(all_lines)
     lines = [f"{qty} {item}" for item, qty in all_lines]
-    return scene, name, target, other, target_lines, other_lines, lines
+    return scene, name, target, other, target_lines, other_lines + extra_lines, lines
 
 
-def _list_question(rng, scene, name, lines, ask, answer, explanation, variant, target):
+def _list_question(rng, scene, name, lines, ask, answer, explanation, variant, target,
+                   scale):
     signature = ("wp_list", scene.key, variant, target.short, tuple(sorted(lines)), answer)
     text = _assemble(
         _opener(rng, name, scene.list_name),
         _bullets(lines),
-        " ".join(_noise(rng, scene.flavour)),
+        " ".join(_noise(rng, scene.flavour, max_facts=SCALES[scale]["facts"])),
         ask,
     )
     return signature, text, answer, explanation
 
 
-def list_count(rng: random.Random, lo: int, hi: int):
+def list_count(rng: random.Random, lo: int, hi: int, *, scale: str = "standard"):
     """How many of the list belong in one section?"""
-    scene, name, target, other, target_lines, _, lines = _list_scene(rng, hi)
+    scene, name, target, other, target_lines, _, lines = _list_scene(rng, hi, scale)
     total = sum(q for _, q in target_lines)
     ask = rng.choice([
         f"Counting every single one, how many {scene.unit} on the list come from {target.described}?",
@@ -502,12 +539,14 @@ def list_count(rng: random.Random, lo: int, hi: int):
         f"Only the {target.short} lines count: {sums} = {total}. "
         f"The rest of the list belongs somewhere else! 🛒"
     )
-    return _list_question(rng, scene, name, lines, ask, total, explanation, "count", target)
+    return _list_question(
+        rng, scene, name, lines, ask, total, explanation, "count", target, scale
+    )
 
 
-def list_outside(rng: random.Random, lo: int, hi: int):
+def list_outside(rng: random.Random, lo: int, hi: int, *, scale: str = "standard"):
     """How much of the list is *not* in one section?"""
-    scene, name, target, other, _, other_lines, lines = _list_scene(rng, hi)
+    scene, name, target, other, _, other_lines, lines = _list_scene(rng, hi, scale)
     total = sum(q for _, q in other_lines)
     ask = rng.choice([
         f"How many {scene.unit} on the list do NOT come from {target.short}?",
@@ -515,16 +554,26 @@ def list_outside(rng: random.Random, lo: int, hi: int):
     ])
     sums = " + ".join(str(q) for _, q in other_lines)
     explanation = f"Everything except the {target.short} lines: {sums} = {total}. 🛒"
-    return _list_question(rng, scene, name, lines, ask, total, explanation, "outside", target)
+    return _list_question(
+        rng, scene, name, lines, ask, total, explanation, "outside", target, scale
+    )
 
 
-def list_difference(rng: random.Random, lo: int, hi: int):
-    """How many more come from one section than another?"""
-    scene, name, target, other, target_lines, other_lines, lines = _list_scene(rng, hi)
+def list_difference(rng: random.Random, lo: int, hi: int, *, scale: str = "standard"):
+    """How many more come from one section than another?
+
+    The comparison is target vs the named other zone; at the "long"
+    scale the third zone's lines sit in the list purely as distractors,
+    so they are excluded from both sides here.
+    """
+    scene, name, target, other, target_lines, all_other, lines = _list_scene(rng, hi, scale)
+    other_lines = [
+        (item, qty) for item, qty in all_other if item in other.items
+    ]
     t_total = sum(q for _, q in target_lines)
     o_total = sum(q for _, q in other_lines)
     if t_total == o_total:  # a 0 answer makes a limp question
-        return list_count(rng, lo, hi)
+        return list_count(rng, lo, hi, scale=scale)
     big, small = (target, other) if t_total > o_total else (other, target)
     big_total, small_total = max(t_total, o_total), min(t_total, o_total)
     answer = big_total - small_total
@@ -536,7 +585,9 @@ def list_difference(rng: random.Random, lo: int, hi: int):
         f"{_cap(big.short)}: {big_total}. {_cap(small.short)}: {small_total}. "
         f"{big_total} - {small_total} = {answer}. 🛒"
     )
-    return _list_question(rng, scene, name, lines, ask, answer, explanation, "difference", target)
+    return _list_question(
+        rng, scene, name, lines, ask, answer, explanation, "difference", target, scale
+    )
 
 
 # ---------- shape 3: priced lists ----------
@@ -547,10 +598,10 @@ def _priced_lines(rng: random.Random, scene: PricedScene, count: int):
     return [(item, rng.randint(2, 5), rng.randint(lo, hi)) for item, lo, hi in chosen]
 
 
-def _priced_scene(rng: random.Random):
+def _priced_scene(rng: random.Random, scale: str = "standard"):
     scene = rng.choice(PRICED_SCENES)
     name = rng.choice(NAMES)
-    entries = _priced_lines(rng, scene, rng.randint(3, 4))
+    entries = _priced_lines(rng, scene, rng.randint(*SCALES[scale]["priced"]))
     lines = [f"{qty} {item} — ${price} each" for item, qty, price in entries]
     totals = [qty * price for _, qty, price in entries]
     return scene, name, entries, lines, totals, sum(totals)
@@ -567,9 +618,9 @@ def _priced_question(rng, scene, name, lines, extras, ask, answer, explanation, 
     return signature, text, answer, explanation
 
 
-def priced_total(rng: random.Random, lo: int, hi: int):
-    scene, name, entries, lines, totals, total = _priced_scene(rng)
-    extras = _noise(rng, scene.flavour, tax=True)
+def priced_total(rng: random.Random, lo: int, hi: int, *, scale: str = "standard"):
+    scene, name, entries, lines, totals, total = _priced_scene(rng, scale)
+    extras = _noise(rng, scene.flavour, tax=True, max_facts=SCALES[scale]["facts"])
     ask = rng.choice([
         "How many dollars does the whole list cost?",
         "How many dollars is everything altogether?",
@@ -580,10 +631,11 @@ def priced_total(rng: random.Random, lo: int, hi: int):
     return _priced_question(rng, scene, name, lines, extras, ask, total, explanation, "total")
 
 
-def priced_change(rng: random.Random, lo: int, hi: int):
-    scene, name, entries, lines, totals, total = _priced_scene(rng)
+def priced_change(rng: random.Random, lo: int, hi: int, *, scale: str = "standard"):
+    scene, name, entries, lines, totals, total = _priced_scene(rng, scale)
     note = next(n for n in (20, 50, 100, 200) if n > total)
-    extras = _noise(rng, scene.flavour, tax=True, always=[f"{name} pays with a ${note} note."])
+    extras = _noise(rng, scene.flavour, tax=True, max_facts=SCALES[scale]["facts"],
+                    always=[f"{name} pays with a ${note} note."])
     ask = rng.choice([
         "How many dollars of change come back?",
         "How much change is there, in dollars?",
@@ -597,13 +649,14 @@ def priced_change(rng: random.Random, lo: int, hi: int):
     )
 
 
-def priced_split(rng: random.Random, lo: int, hi: int):
+def priced_split(rng: random.Random, lo: int, hi: int, *, scale: str = "standard"):
     """Splitting the bill keeps division in the upper tiers."""
-    scene, name, entries, lines, totals, total = _priced_scene(rng)
+    scene, name, entries, lines, totals, total = _priced_scene(rng, scale)
     friends = _divisor_for(total, rng)
     if friends is None:  # no tidy split — ask the plain total instead
-        return priced_total(rng, lo, hi)
-    extras = _noise(rng, scene.flavour, tax=True, always=[f"{friends} friends share the cost equally."])
+        return priced_total(rng, lo, hi, scale=scale)
+    extras = _noise(rng, scene.flavour, tax=True, max_facts=SCALES[scale]["facts"],
+                    always=[f"{friends} friends share the cost equally."])
     ask = rng.choice([
         "How many dollars does each friend pay?",
         "Split evenly, how many dollars is that each?",
@@ -616,13 +669,13 @@ def priced_split(rng: random.Random, lo: int, hi: int):
     return _priced_question(rng, scene, name, lines, extras, ask, answer, explanation, "split")
 
 
-def priced_difference(rng: random.Random, lo: int, hi: int):
-    scene, name, entries, lines, totals, total = _priced_scene(rng)
+def priced_difference(rng: random.Random, lo: int, hi: int, *, scale: str = "standard"):
+    scene, name, entries, lines, totals, total = _priced_scene(rng, scale)
     ranked = sorted(entries, key=lambda e: e[1] * e[2], reverse=True)
     (item_a, qty_a, price_a), (item_b, qty_b, price_b) = ranked[0], ranked[-1]
     if qty_a * price_a == qty_b * price_b:
-        return priced_total(rng, lo, hi)
-    extras = _noise(rng, scene.flavour, tax=True)
+        return priced_total(rng, lo, hi, scale=scale)
+    extras = _noise(rng, scene.flavour, tax=True, max_facts=SCALES[scale]["facts"])
     answer = qty_a * price_a - qty_b * price_b
     ask = rng.choice([
         f"How many dollars more do the {item_a} cost than the {item_b}?",
@@ -811,21 +864,24 @@ def _rule_setup(rng: random.Random, hi: int, *, used: int = 2, max_value: int | 
     return scene, name, shown, chosen, counts, rules_block
 
 
-def _rule_question(rng, scene, name, rules_block, event, ask, answer, explanation, variant, key):
+def _rule_question(rng, scene, name, rules_block, event, ask, answer, explanation, variant,
+                   key, scale="standard"):
     signature = ("wp_rules", scene.key, variant, key, answer)
     text = _assemble(
         scene.intro.format(name=name),
         f"{scene.rules_lead}\n{rules_block}",
-        " ".join(_noise(rng, scene.flavour, always=[event])),
+        " ".join(_noise(rng, scene.flavour, always=[event],
+                        max_facts=SCALES[scale]["facts"])),
         ask,
     )
     return signature, text, answer, explanation
 
 
-def tally_total(rng: random.Random, lo: int, hi: int, *, max_value: int | None = None):
+def tally_total(rng: random.Random, lo: int, hi: int, *, max_value: int | None = None,
+                scale: str = "standard"):
     """Rules stated, then a tally: multiply each and add up."""
     scene, name, shown, chosen, counts, rules_block = _rule_setup(
-        rng, hi, used=rng.randint(2, 3), max_value=max_value
+        rng, hi, used=rng.randint(*SCALES[scale]["rule_used"]), max_value=max_value
     )
     parts = [f"{c} {plural}" for (plural, _, _), c in zip(chosen, counts)]
     event = (
@@ -848,11 +904,12 @@ def tally_total(rng: random.Random, lo: int, hi: int, *, max_value: int | None =
     )
     key = tuple((p, c) for (p, _, _), c in zip(chosen, counts))
     return _rule_question(
-        rng, scene, name, rules_block, event, ask, answer, explanation, "total", key
+        rng, scene, name, rules_block, event, ask, answer, explanation, "total", key, scale
     )
 
 
-def tally_difference(rng: random.Random, lo: int, hi: int, *, max_value: int | None = None):
+def tally_difference(rng: random.Random, lo: int, hi: int, *, max_value: int | None = None,
+                     scale: str = "standard"):
     """Which kind was worth more, and by how much?"""
     scene, name, shown, chosen, counts, rules_block = _rule_setup(
         rng, hi, used=2, max_value=max_value
@@ -860,7 +917,7 @@ def tally_difference(rng: random.Random, lo: int, hi: int, *, max_value: int | N
     (plural_a, _, value_a), (plural_b, _, value_b) = chosen
     total_a, total_b = counts[0] * value_a, counts[1] * value_b
     if total_a == total_b:
-        return tally_total(rng, lo, hi, max_value=max_value)
+        return tally_total(rng, lo, hi, max_value=max_value, scale=scale)
     event = f"{_cap(scene.record)} shows {counts[0]} {plural_a} and {counts[1]} {plural_b}."
     if total_a > total_b:
         big_name, small_name, big, small = plural_a, plural_b, total_a, total_b
@@ -878,11 +935,11 @@ def tally_difference(rng: random.Random, lo: int, hi: int, *, max_value: int | N
     )
     key = ((plural_a, counts[0]), (plural_b, counts[1]))
     return _rule_question(
-        rng, scene, name, rules_block, event, ask, answer, explanation, "difference", key
+        rng, scene, name, rules_block, event, ask, answer, explanation, "difference", key, scale
     )
 
 
-def tally_missing(rng: random.Random, lo: int, hi: int):
+def tally_missing(rng: random.Random, lo: int, hi: int, *, scale: str = "standard"):
     """Total known, one kind only — how many were there? (division)"""
     scene, name, shown, chosen, counts, rules_block = _rule_setup(rng, hi, used=1)
     (plural, singular, value) = chosen[0]
@@ -899,7 +956,8 @@ def tally_missing(rng: random.Random, lo: int, hi: int):
         f"{total} ÷ {value} = {answer} {plural}. 🏅"
     )
     return _rule_question(
-        rng, scene, name, rules_block, event, ask, answer, explanation, "missing", (plural, total)
+        rng, scene, name, rules_block, event, ask, answer, explanation, "missing",
+        (plural, total), scale
     )
 
 
@@ -918,11 +976,11 @@ def _free_cost(qty: int, unit: int, buy_n: int) -> int:
     return (qty - free) * unit
 
 
-def _deal_setup(rng: random.Random):
+def _deal_setup(rng: random.Random, scale: str = "standard"):
     """One line on offer, the rest at plain prices."""
     scene = rng.choice(PRICED_SCENES)
     name = rng.choice(NAMES)
-    entries = _priced_lines(rng, scene, rng.randint(2, 3))
+    entries = _priced_lines(rng, scene, 1 + rng.randint(*SCALES[scale]["deal_rest"]))
     deal_item, _, unit = entries[0]
     unit = max(unit, 2)
 
@@ -959,10 +1017,10 @@ def _deal_setup(rng: random.Random):
     return scene, name, deal_item, qty, unit, cost, working, kind, rest, lines
 
 
-def deal_total(rng: random.Random, lo: int, hi: int):
-    scene, name, deal_item, qty, unit, cost, working, kind, rest, lines = _deal_setup(rng)
+def deal_total(rng: random.Random, lo: int, hi: int, *, scale: str = "standard"):
+    scene, name, deal_item, qty, unit, cost, working, kind, rest, lines = _deal_setup(rng, scale)
     total = cost + sum(q * p for _, q, p in rest)
-    extras = _noise(rng, scene.flavour, tax=True)
+    extras = _noise(rng, scene.flavour, tax=True, max_facts=SCALES[scale]["facts"])
     ask = rng.choice([
         "How many dollars does the whole list cost?",
         "With the offer used, how many dollars is that altogether?",
@@ -978,12 +1036,12 @@ def deal_total(rng: random.Random, lo: int, hi: int):
     return signature, text, total, explanation
 
 
-def deal_saving(rng: random.Random, lo: int, hi: int):
-    scene, name, deal_item, qty, unit, cost, working, kind, rest, lines = _deal_setup(rng)
+def deal_saving(rng: random.Random, lo: int, hi: int, *, scale: str = "standard"):
+    scene, name, deal_item, qty, unit, cost, working, kind, rest, lines = _deal_setup(rng, scale)
     full = qty * unit
     if full - cost < 2:  # a $1 saving isn't worth asking about
-        return deal_total(rng, lo, hi)
-    extras = _noise(rng, scene.flavour, tax=True)
+        return deal_total(rng, lo, hi, scale=scale)
+    extras = _noise(rng, scene.flavour, tax=True, max_facts=SCALES[scale]["facts"])
     answer = full - cost
     ask = rng.choice([
         f"How many dollars does the offer save on the {deal_item}?",
@@ -1050,7 +1108,7 @@ def _choice_lines(item: ChoiceItem, unit: int, deal_n: int, deal_price: int):
     ]
 
 
-def choice_cheapest(rng: random.Random, lo: int, hi: int):
+def choice_cheapest(rng: random.Random, lo: int, hi: int, *, scale: str = "standard"):
     """The list says just "peaches" — so either kind will do."""
     item, name, qty, unit, deal_n, deal_price, plain_cost, fancy_cost = _choice_setup(rng)
     lines = _choice_lines(item, unit, deal_n, deal_price)
@@ -1084,7 +1142,7 @@ def choice_cheapest(rng: random.Random, lo: int, hi: int):
     return signature, text, answer, explanation
 
 
-def choice_specified(rng: random.Random, lo: int, hi: int):
+def choice_specified(rng: random.Random, lo: int, hi: int, *, scale: str = "standard"):
     """Same stall, but the list names one kind — the cheaper one may be
     off the table. Reading carefully *is* the question."""
     item, name, qty, unit, deal_n, deal_price, plain_cost, fancy_cost = _choice_setup(rng)
@@ -1129,13 +1187,13 @@ TIER_LIST = (list_count, list_outside, list_difference)
 
 
 
-def tally_total_small(rng: random.Random, lo: int, hi: int):
+def tally_total_small(rng: random.Random, lo: int, hi: int, *, scale: str = "standard"):
     """Grade-2 scoring: nothing worth more than 5 a go."""
-    return tally_total(rng, lo, hi, max_value=5)
+    return tally_total(rng, lo, hi, max_value=5, scale=scale)
 
 
-def tally_difference_small(rng: random.Random, lo: int, hi: int):
-    return tally_difference(rng, lo, hi, max_value=5)
+def tally_difference_small(rng: random.Random, lo: int, hi: int, *, scale: str = "standard"):
+    return tally_difference(rng, lo, hi, max_value=5, scale=scale)
 
 
 TIER_LIST_PLUS = TIER_LIST + (tally_total_small, tally_difference_small)
@@ -1161,6 +1219,12 @@ TIERS: dict[str, tuple[Callable, ...]] = {
 }
 
 
-def tier_factory(tier: str):
-    """A fresh rotating factory for `tier` — one per quiz."""
-    return rotating(TIERS[tier], tier)
+def tier_factory(tier: str, scale: str = "standard"):
+    """A fresh rotating factory for `tier` — one per quiz.
+
+    `scale` sets the reading load (SCALES above), independent of the
+    maths tier: a 2nd grader's list question and a 4th grader's differ
+    in how much there is to read, not just in the arithmetic.
+    """
+    builders = tuple(partial(b, scale=scale) for b in TIERS[tier])
+    return rotating(builders, tier)

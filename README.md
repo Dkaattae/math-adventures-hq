@@ -52,6 +52,11 @@ leaderboard.
   (cutting a 3 m ribbon into 50 cm pieces). Money & time reaches the
   *fewest* coins that make an amount and clock arithmetic that lands on
   a time ("leaves at 11:10, journey 70 min — when to set off?").
+- **Reading scales with the reader**: the maths tier and the reading
+  load are separate knobs. Grades 1–2 get short lists with no
+  scene-setting noise; grades 3–4 the standard scene; grade 5 longer
+  lists with an extra distractor section. Same templates throughout —
+  each level just draws more or fewer lines from the same scenes.
 - **Grade-appropriate topics**: the setup screen only offers topics that
   fit the chosen grade (no long division for Kindergarteners), and the
   🎲 Mixed quiz samples only from unlocked topics.
@@ -91,8 +96,10 @@ leaderboard.
   it. The leaderboard stays public.
 - **Progress view**: a "My Progress" screen shows totals, per-topic
   averages and bests, and recent quizzes.
-- **Visual geometry**: shape-identification questions render the shape as
-  an inline SVG ("how many sides does *this* shape have?").
+- **Visual geometry on a ladder**: K–2 identify the drawn shape; grades
+  2–3 read a property off it (lines of symmetry, "is this angle acute,
+  right or obtuse?" — the angle is drawn, not named); grades 4–5 compute
+  perimeter and area from a rectangle with labelled sides.
 - **Leaderboard**: score + time ranking with Grade / Topic / Level
   filters right on the home screen.
 - **Kid-friendly explanations**: every question carries a short "here's
