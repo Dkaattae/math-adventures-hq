@@ -1161,35 +1161,159 @@ _GEOMETRY_VISUAL: list[VisualGeometryItem] = [
 ]
 
 
-def _geometry_pool(difficulty: Difficulty, grade: Grade) -> list[GeometryItem]:
-    """Pick which tiers are in play for this (difficulty, grade) combo.
+def _geometry_tier(difficulty: Difficulty, grade: Grade) -> int:
+    """0 = identification, 1 = properties, 2 = formulas & reasoning.
 
     Grade is the primary driver (you don't ask a Kindergartener about
     volume). Difficulty shifts the tier up or down by one step.
     """
     g = 0 if grade == Grade.K else int(grade.value)
     if g <= 1:
-        base_tier = 0  # EASY
+        base_tier = 0
     elif g <= 3:
-        base_tier = 1  # EASY + MEDIUM
+        base_tier = 1
     else:
-        base_tier = 2  # MEDIUM + HARD
+        base_tier = 2
 
     if difficulty == Difficulty.easy and base_tier > 0:
-        tier = base_tier - 1
-    elif difficulty == Difficulty.hard and base_tier < 2:
-        tier = base_tier + 1
-    else:
-        tier = base_tier
+        return base_tier - 1
+    if difficulty == Difficulty.hard and base_tier < 2:
+        return base_tier + 1
+    return base_tier
 
-    # Visual shape questions ride along with the EASY tier (they're
-    # identification-level). Entries may be 3-tuples (text-only) or
-    # 4-tuples (with a figure); _generate_geometry normalizes both.
+
+def _geometry_pool(difficulty: Difficulty, grade: Grade) -> list[GeometryItem]:
+    tier = _geometry_tier(difficulty, grade)
+    # Visual shape-ID questions ride along with the EASY tier. Entries
+    # may be 3-tuples (text-only) or 4-tuples (with a figure);
+    # _generate_geometry normalizes both. The richer visual questions
+    # (symmetry, angles, perimeter/area) are generated per quiz — see
+    # _visual_items.
     if tier == 0:
         return _GEOMETRY_EASY + _GEOMETRY_VISUAL
     if tier == 1:
         return _GEOMETRY_EASY + _GEOMETRY_VISUAL + _GEOMETRY_MEDIUM
     return _GEOMETRY_MEDIUM + _GEOMETRY_HARD
+
+
+# ---------- visual geometry beyond shape ID ----------
+#
+# The same grade ladder the text questions follow, applied to pictures:
+# K-2 identify the shape they see; grade 2-3 read a *property* off the
+# figure (symmetry, what kind of angle); grade 4-5 compute from labelled
+# dimensions (perimeter, then area). The rectangle's numbers are drawn
+# in the figure — reading data off a diagram is the skill — while the
+# angle figure is deliberately unlabelled, because printing the degrees
+# would answer "acute or obtuse?" by itself.
+
+_SYMMETRY_SHAPES = [
+    ("square", 4, "A square folds onto itself 4 ways!"),
+    ("rectangle", 2, "A rectangle folds in half two ways — but not on its diagonals!"),
+    ("triangle", 3, "This triangle has 3 equal sides, so 3 fold lines!"),
+    ("pentagon", 5, "A regular pentagon: one fold line through each corner!"),
+    ("hexagon", 6, "A regular hexagon: 6 fold lines!"),
+    ("octagon", 8, "A regular octagon: 8 fold lines!"),
+]
+
+
+def _vis_symmetry(rng: random.Random, used: set) -> VisualGeometryItem | None:
+    options = [x for x in _SYMMETRY_SHAPES if ("sym", x[0]) not in used]
+    if not options:
+        return None
+    shape, count, why = rng.choice(options)
+    used.add(("sym", shape))
+    return (
+        "How many lines of symmetry does this shape have?",
+        count,
+        f"{why} ✂️",
+        shape,
+    )
+
+
+def _vis_angle_type(rng: random.Random, used: set) -> VisualGeometryItem | None:
+    kind = rng.choice(["acute", "right", "obtuse"])
+    if kind == "right":
+        deg = 90
+    elif kind == "acute":
+        deg = rng.choice([20, 30, 40, 45, 55, 65, 75])
+    else:
+        deg = rng.choice([100, 110, 120, 130, 140, 150, 160])
+    if ("angle", deg) in used:
+        return None
+    used.add(("angle", deg))
+    return (
+        "Look at this angle. Is it acute, right, or obtuse?",
+        kind,
+        f"This angle is {deg}° — {'exactly a quarter turn' if deg == 90 else ('smaller than 90°' if deg < 90 else 'bigger than 90°')}, so it is {kind}! 📐",
+        f"angle:{deg}",
+    )
+
+
+def _vis_perimeter(rng: random.Random, used: set) -> VisualGeometryItem | None:
+    w, h = rng.randint(3, 12), rng.randint(2, 9)
+    if w == h or ("rect", w, h) in used:
+        return None
+    used.add(("rect", w, h))
+    return (
+        "The rectangle's sides are labelled in centimeters.\n\n"
+        "What is its perimeter, in centimeters?",
+        2 * (w + h),
+        f"Perimeter goes all the way round: {w} + {h} + {w} + {h} = {2 * (w + h)} cm! 📏",
+        f"rect:{w}x{h}",
+    )
+
+
+def _vis_area(rng: random.Random, used: set) -> VisualGeometryItem | None:
+    w, h = rng.randint(3, 12), rng.randint(2, 9)
+    if w == h or ("rect", w, h) in used:
+        return None
+    used.add(("rect", w, h))
+    return (
+        "The rectangle's sides are labelled in centimeters.\n\n"
+        "What is its area, in square centimeters?",
+        w * h,
+        f"Area fills the inside: {w} × {h} = {w * h} square cm! 📐",
+        f"rect:{w}x{h}",
+    )
+
+
+def _visual_items(difficulty: Difficulty, grade: Grade, rng: random.Random):
+    """Per-quiz generated visual questions for this level.
+
+    Tier 0 adds nothing (the static shape-ID visuals already ride along
+    with the EASY pool); tier 1 reads properties off the figure; tier 2
+    adds computing from labelled dimensions.
+    """
+    tier = _geometry_tier(difficulty, grade)
+    if tier == 0:
+        return []
+    builders = (
+        [_vis_symmetry, _vis_angle_type, _vis_perimeter]
+        if tier == 1
+        else [_vis_angle_type, _vis_perimeter, _vis_area, _vis_symmetry]
+    )
+    used: set = set()
+    items = []
+    for builder in builders * 2:  # two of each shape, dedup permitting
+        item = builder(rng, used)
+        if item is not None:
+            items.append(item)
+    return items
+
+
+def _reading_scale(difficulty: Difficulty, g: int) -> str:
+    """How much reading a scene question carries (word_problems.SCALES).
+
+    Separate from the maths tier on purpose: a 2nd grader used to get
+    the same 4-6 line list as a 4th grader — easier arithmetic, but the
+    same wall of text. Grades 1-2 read a short list with no scene noise;
+    grade 5 above easy reads a longer one with an extra distractor zone.
+    """
+    if g <= 2:
+        return "short"
+    if g >= 5 and difficulty != Difficulty.easy:
+        return "long"
+    return "standard"
 
 
 def _word_problem_tier(difficulty: Difficulty, g: int) -> str:
@@ -1271,7 +1395,9 @@ def _pick_factory(math_type: MathType, difficulty: Difficulty, grade: Grade) -> 
         return _make_ooo_basic
 
     if math_type == MathType.word_problems:
-        return word_problems.tier_factory(_word_problem_tier(difficulty, g))
+        return word_problems.tier_factory(
+            _word_problem_tier(difficulty, g), scale=_reading_scale(difficulty, g)
+        )
 
     if math_type == MathType.comparison:
         tier = _comparison_tier(difficulty, g)
@@ -1313,7 +1439,22 @@ def _generate_geometry(difficulty: Difficulty, grade: Grade, rng: random.Random)
     # yields 10 unique questions. Pool entries are 3-tuples (text-only)
     # or 4-tuples (with a figure to draw).
     pool = _geometry_pool(difficulty, grade)
-    picks = rng.sample(pool, k=10)
+    # The generated visual items (symmetry, angles, labelled rectangles)
+    # are a handful against a static pool of ~80-90, so they get a
+    # guaranteed 2-3 seats per quiz instead of a raffle ticket.
+    visuals = _visual_items(difficulty, grade, rng)
+    if visuals:
+        take = min(len(visuals), rng.randint(2, 3))
+        # A labelled-rectangle question is the point of the top tier, so
+        # when the tier offers one, one of the seats is reserved for it.
+        rects = [v for v in visuals if v[3].startswith("rect:")]
+        chosen = [rng.choice(rects)] if rects else []
+        rest = [v for v in visuals if v not in chosen]
+        chosen += rng.sample(rest, k=take - len(chosen))
+        picks = chosen + rng.sample(pool, k=10 - take)
+        rng.shuffle(picks)
+    else:
+        picks = rng.sample(pool, k=10)
     questions: list[QuestionInternal] = []
     for i, item in enumerate(picks):
         text, ans, expl = item[0], item[1], item[2]
@@ -1363,7 +1504,14 @@ def _generate_mixed(difficulty: Difficulty, grade: Grade, rng: random.Random):
         for _ in range(_MAX_ATTEMPTS):
             math_type = rng.choice(pool_types)
             if math_type == MathType.geometry:
-                item = rng.choice(_geometry_pool(difficulty, grade))
+                # The generated visual items are a handful against a
+                # static pool of ~80, so give them a fixed share here or
+                # a mixed quiz would almost never show one.
+                visuals = _visual_items(difficulty, grade, rng)
+                if visuals and rng.random() < 0.35:
+                    item = rng.choice(visuals)
+                else:
+                    item = rng.choice(_geometry_pool(difficulty, grade))
                 text, answer, explanation = item[0], item[1], item[2]
                 figure = item[3] if len(item) > 3 else None
                 signature = ("geo", text)

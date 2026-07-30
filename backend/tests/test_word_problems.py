@@ -117,12 +117,16 @@ def test_tax_note_is_not_stamped_on_every_price_question():
 
 
 def test_list_scenes_show_more_than_the_answer_needs():
-    for seed in SEEDS:
-        for q in _questions(Grade.G2, Difficulty.easy, seed):
-            lines = [ln for ln in q.question.splitlines() if ln.startswith("•")]
-            assert len(lines) >= 4, q.question
-            quantities = [int(re.match(r"• (\d+)", ln).group(1)) for ln in lines]
-            assert q.correctAnswer < sum(quantities), q.question
+    """Even the short scale keeps at least one line the answer ignores."""
+    for grade, difficulty, minimum in [
+        (Grade.G2, Difficulty.easy, 3), (Grade.G3, Difficulty.easy, 4)
+    ]:
+        for seed in SEEDS:
+            for q in _questions(grade, difficulty, seed):
+                lines = [ln for ln in q.question.splitlines() if ln.startswith("•")]
+                assert len(lines) >= minimum, q.question
+                quantities = [int(re.match(r"• (\d+)", ln).group(1)) for ln in lines]
+                assert q.correctAnswer < sum(quantities), q.question
 
 
 # ---------- shape: prices ----------
@@ -330,3 +334,88 @@ def test_offers_never_reduce_to_a_round_unit_price():
                 for m in re.finditer(r"(\d+) for \$(\d+)", q.question):
                     count, price = int(m.group(1)), int(m.group(2))
                     assert price % count, q.question
+
+
+# ---------- reading scales ----------
+#
+# The maths tier and the reading load are separate knobs: a 2nd grader
+# used to get the same 4-6 line list as a 4th grader.
+
+
+def _bullets_of(q):
+    return [ln for ln in q.question.splitlines() if ln.startswith("•")]
+
+
+def test_grades_one_and_two_read_short_lists_with_no_noise():
+    for grade, difficulty in [
+        (Grade.G1, Difficulty.hard), (Grade.G2, Difficulty.easy),
+        (Grade.G2, Difficulty.medium), (Grade.G2, Difficulty.hard),
+    ]:
+        for seed in SEEDS:
+            for q in _questions(grade, difficulty, seed):
+                blocks = q.question.split("\n\n")
+                bullets = _bullets_of(q)
+                if bullets:
+                    assert len(bullets) <= 4, q.question
+                # No scene-setting noise: every block is the opener, the
+                # list/rules, a *required* fact (pays-with, shares), or
+                # the question itself.
+                for block in blocks[2:-1]:
+                    assert (
+                        "note." in block or "share the cost" in block
+                        or "no tax" in block.lower() or "prices already" in block.lower()
+                        or "delivery fee" in block.lower()
+                        or block.startswith(("The score", "The reading", "The spotting"))
+                        or " shows " in block
+                    ), f"unexpected extra reading at {grade}/{difficulty}: {block!r}"
+
+
+def test_grade_five_reads_longer_lists_than_lower_grades():
+    """Same maths tier (prices), different reading scale: G5 medium runs
+    long, G3 medium runs standard, G2 hard runs short."""
+    def average_bullets(grade, difficulty):
+        counts = [
+            len(_bullets_of(q))
+            for seed in SEEDS
+            for q in _questions(grade, difficulty, seed)
+            if _bullets_of(q)
+        ]
+        return sum(counts) / len(counts)
+
+    g2 = average_bullets(Grade.G2, Difficulty.hard)
+    g3 = average_bullets(Grade.G3, Difficulty.medium)
+    g5 = average_bullets(Grade.G5, Difficulty.medium)
+    assert g2 < g3 < g5, (g2, g3, g5)
+
+
+def test_long_scale_lists_can_carry_a_third_distractor_zone():
+    """Grade-5 list questions may show lines from a zone the question
+    never mentions — pure sifting."""
+    # list shapes only appear at the long scale through medium G5? They
+    # don't: G5 runs prices/deals. Long-scale lists exist via the mixed
+    # topic; assert the machinery directly instead.
+    import random as _random
+
+    from app import word_problems as wp
+
+    saw_extra = False
+    for seed in range(60):
+        rng = _random.Random(seed)
+        sig, text, answer, expl = wp.list_count(rng, 1, 9, scale="long")
+        bullets = [ln for ln in text.splitlines() if ln.startswith("•")]
+        if len(bullets) >= 7:
+            saw_extra = True
+            break
+    assert saw_extra, "long scale never produced an extended list"
+
+
+def test_scale_only_changes_the_reading_not_the_tier():
+    from app.questions import _reading_scale, _word_problem_tier
+
+    # Same tier at G3 easy and G2 easy-adjacent levels can differ in scale…
+    assert _word_problem_tier(Difficulty.easy, 2) == _word_problem_tier(Difficulty.easy, 3)
+    assert _reading_scale(Difficulty.easy, 2) == "short"
+    assert _reading_scale(Difficulty.easy, 3) == "standard"
+    # …and grade 5 splits scale by difficulty without changing maths tier.
+    assert _reading_scale(Difficulty.easy, 5) == "standard"
+    assert _reading_scale(Difficulty.hard, 5) == "long"

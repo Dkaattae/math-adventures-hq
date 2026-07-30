@@ -1,6 +1,10 @@
-// Draws a named geometry shape as an inline SVG for visual questions.
-// Regular polygons are computed from a side count; circle and rectangle
-// are special-cased.
+// Draws a geometry figure as an inline SVG for visual questions.
+// Three kinds of figure string:
+//   - named shapes ("pentagon", "circle") — computed regular polygons
+//     plus circle/rectangle
+//   - "angle:<degrees>" — two rays with an arc (or a right-angle mark)
+//   - "rect:<w>x<h>" — a rectangle with labelled side lengths, for
+//     perimeter/area questions
 
 const POLYGON_SIDES: Record<string, number> = {
   triangle: 3,
@@ -40,7 +44,71 @@ const ShapeFigure = ({ shape, label = "geometry shape", className = "w-28 h-28 m
   const common = { fill, stroke, strokeWidth: 4, strokeLinejoin: "round" as const };
 
   let figure;
-  if (shape === "circle") {
+  if (shape.startsWith("angle:")) {
+    // An angle to classify: vertex bottom-left, one arm flat, the other
+    // rotated up by the given degrees. No number is drawn — naming the
+    // measure would answer "is this acute or obtuse?" for the player.
+    const deg = Math.max(10, Math.min(170, parseInt(shape.slice(6), 10) || 60));
+    const vx = 22;
+    const vy = SIZE - 24;
+    const arm = SIZE - 40;
+    const rad = (deg * Math.PI) / 180;
+    const x2 = vx + arm * Math.cos(rad);
+    const y2 = vy - arm * Math.sin(rad);
+    const lineProps = { stroke, strokeWidth: 4, strokeLinecap: "round" as const };
+    let marker;
+    if (deg === 90) {
+      const m = 16;
+      marker = (
+        <path d={`M ${vx + m} ${vy} L ${vx + m} ${vy - m} L ${vx} ${vy - m}`}
+              fill="none" stroke={stroke} strokeWidth={3} />
+      );
+    } else {
+      const r = 20;
+      const ax = vx + r * Math.cos(rad);
+      const ay = vy - r * Math.sin(rad);
+      marker = (
+        <path d={`M ${vx + r} ${vy} A ${r} ${r} 0 0 0 ${ax.toFixed(1)} ${ay.toFixed(1)}`}
+              fill="none" stroke={stroke} strokeWidth={3} />
+      );
+    }
+    figure = (
+      <g>
+        <line x1={vx} y1={vy} x2={vx + arm} y2={vy} {...lineProps} />
+        <line x1={vx} y1={vy} x2={x2.toFixed(1)} y2={y2.toFixed(1)} {...lineProps} />
+        {marker}
+      </g>
+    );
+  } else if (shape.startsWith("rect:")) {
+    // A rectangle with labelled sides, e.g. "rect:6x3" — the numbers are
+    // the question's data, so they ARE drawn (unitless; the question
+    // text supplies the unit).
+    const [wRaw, hRaw] = shape.slice(5).split("x").map((n) => parseInt(n, 10));
+    const w = Math.max(1, wRaw || 4);
+    const h = Math.max(1, hRaw || 3);
+    // Scale the longer side to the drawing area, keep the aspect ratio
+    // within sane bounds so a 12x2 strip is still visibly a rectangle.
+    const maxW = SIZE - 44;
+    const maxH = SIZE - 56;
+    const scale = Math.min(maxW / w, maxH / h);
+    const drawW = Math.max(30, w * scale);
+    const drawH = Math.max(24, h * scale);
+    const x = (SIZE - drawW) / 2;
+    const y = (SIZE - drawH) / 2 - 4;
+    const textProps = {
+      fill: "hsl(var(--foreground))",
+      fontSize: 13,
+      fontWeight: 700,
+      textAnchor: "middle" as const,
+    };
+    figure = (
+      <g>
+        <rect x={x} y={y} width={drawW} height={drawH} rx={3} {...common} />
+        <text x={x + drawW / 2} y={y + drawH + 16} {...textProps}>{w}</text>
+        <text x={x + drawW + 12} y={y + drawH / 2 + 5} {...textProps}>{h}</text>
+      </g>
+    );
+  } else if (shape === "circle") {
     figure = <circle cx={CENTER} cy={CENTER} r={RADIUS} {...common} />;
   } else if (shape === "rectangle") {
     const w = SIZE - 20;

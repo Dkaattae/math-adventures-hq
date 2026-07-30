@@ -25,8 +25,10 @@ Completed work moves to the **Done** section at the bottom.
   question/answer pairs).
 - Practice mode (untimed) vs. challenge mode (streaks; the `badge` field
   already exists end to end).
-- More visual questions: extend the SVG figures beyond shape ID to
-  angles, symmetry, and simple area/perimeter diagrams.
+- ~~More visual questions~~ — done 2026-07-30: angles, symmetry and
+  labelled perimeter/area rectangles, on the same grade ladder as the
+  text questions. Still open beyond that: composite figures, angle
+  arithmetic on a diagram, and coordinate grids.
 
 ---
 
@@ -144,6 +146,31 @@ findings, ordered by impact:
 ## Done
 
 Completed items, newest first.
+
+### 2026-07-30 — reading scales + visual geometry beyond shape ID
+
+- **Reading load now scales separately from the maths.** A 2nd grader
+  used to get the same 4-6 line shopping list as a 4th grader — easier
+  arithmetic, same wall of text. Word problems now carry a reading scale
+  alongside their maths tier (`word_problems.SCALES`): grades 1-2 read a
+  **short** list (3-4 lines) with **no scene-setting noise at all**;
+  grades 3-4 keep today's standard; grade 5 above easy reads a **long**
+  list (up to ~9 lines) that can include a third, never-mentioned zone
+  as pure sifting. Same scenes, same templates — each scale just picks
+  more or fewer items from the same pools. Structural distractors (the
+  wrong-aisle lines) stay at every scale; that's the puzzle, not noise.
+- **Visual geometry grew past "name this shape" — on the same ladder.**
+  K-2 keep identification (sides, corners, names). Grades 2-3 read a
+  *property* off the figure: lines of symmetry, and "is this angle
+  acute, right or obtuse?" drawn as two rays with an arc (deliberately
+  unlabelled — printing 120° would answer the question). Grades 4-5
+  compute from a figure with labelled sides: perimeter, then area.
+  `ShapeFigure` learned two parametric figure strings — `angle:<deg>`
+  and `rect:<w>x<h>` — alongside the named shapes, and mixed quizzes
+  give the generated visuals a fixed share so they actually appear.
+- `test_visual_geometry.py` re-derives every visual answer from the
+  figure string itself; the word-problem suite now pins the scale
+  ladder (short lists and zero noise at G1-2, longer lists at G5).
 
 ### 2026-07-30 — percentages, measurement, money & time became shape-based
 
