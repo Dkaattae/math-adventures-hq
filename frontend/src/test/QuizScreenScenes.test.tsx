@@ -42,14 +42,14 @@ describe("QuizScreen scene questions", () => {
   });
 
   it("keeps the line breaks of a multi-line scene", () => {
-    render(<QuizScreen questions={scenes()} onFinish={vi.fn()} />);
+    render(<QuizScreen questions={scenes()} onFinish={vi.fn()} onQuit={vi.fn()} />);
     const text = screen.getByText(/shopping list/);
     expect(text.className).toContain("whitespace-pre-line");
     expect(text.textContent).toContain("• 4 apples");
   });
 
   it("gives each question the clock the server sent", async () => {
-    render(<QuizScreen questions={scenes(60)} onFinish={vi.fn()} />);
+    render(<QuizScreen questions={scenes(60)} onFinish={vi.fn()} onQuit={vi.fn()} />);
     expect(screen.getByText("⏱ 60s")).toBeInTheDocument();
 
     // Still on question 1 well past the old 15-second limit.
@@ -61,20 +61,20 @@ describe("QuizScreen scene questions", () => {
   });
 
   it("scales the whole-quiz clock to the questions in it", () => {
-    render(<QuizScreen questions={scenes(60)} onFinish={vi.fn()} />);
+    render(<QuizScreen questions={scenes(60)} onFinish={vi.fn()} onQuit={vi.fn()} />);
     // 10 × 60 + 30 slack = 630s = 10:30.
     expect(screen.getByText(/10:30 left/)).toBeInTheDocument();
   });
 
   it("leaves plain questions on the original 15s / 3:00 budget", () => {
-    render(<QuizScreen questions={plain()} onFinish={vi.fn()} />);
+    render(<QuizScreen questions={plain()} onFinish={vi.fn()} onQuit={vi.fn()} />);
     expect(screen.getByText("⏱ 15s")).toBeInTheDocument();
     expect(screen.getByText(/3:00 left/)).toBeInTheDocument();
   });
 
   it("still auto-submits when a scene quiz runs out of time", async () => {
     const onFinish = vi.fn();
-    render(<QuizScreen questions={scenes(60)} onFinish={onFinish} />);
+    render(<QuizScreen questions={scenes(60)} onFinish={onFinish} onQuit={vi.fn()} />);
     await act(() => vi.advanceTimersByTimeAsync(631_000));
     expect(onFinish).toHaveBeenCalledTimes(1);
   });

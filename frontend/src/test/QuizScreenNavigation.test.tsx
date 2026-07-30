@@ -35,7 +35,7 @@ describe("QuizScreen navigation (review-before-submit model)", () => {
   });
 
   it("Next saves the typed draft instead of discarding it", () => {
-    render(<QuizScreen questions={questions} onFinish={vi.fn()} />);
+    render(<QuizScreen questions={questions} onFinish={vi.fn()} onQuit={vi.fn()} />);
 
     type("42");
     fireEvent.click(screen.getByText("Next →"));
@@ -48,7 +48,7 @@ describe("QuizScreen navigation (review-before-submit model)", () => {
   });
 
   it("has no Back button on the first question and no Next on the last", () => {
-    render(<QuizScreen questions={questions} onFinish={vi.fn()} />);
+    render(<QuizScreen questions={questions} onFinish={vi.fn()} onQuit={vi.fn()} />);
 
     expect(screen.queryByText("← Back")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /Question 10, blank/ }));
@@ -57,7 +57,7 @@ describe("QuizScreen navigation (review-before-submit model)", () => {
   });
 
   it("dots jump directly to a question, saving the draft on the way out", () => {
-    render(<QuizScreen questions={questions} onFinish={vi.fn()} />);
+    render(<QuizScreen questions={questions} onFinish={vi.fn()} onQuit={vi.fn()} />);
 
     type("7");
     fireEvent.click(screen.getByRole("button", { name: /Question 5, blank/ }));
@@ -66,7 +66,7 @@ describe("QuizScreen navigation (review-before-submit model)", () => {
   });
 
   it("hides Finish until the last question or a fully answered quiz", () => {
-    render(<QuizScreen questions={questions} onFinish={vi.fn()} />);
+    render(<QuizScreen questions={questions} onFinish={vi.fn()} onQuit={vi.fn()} />);
     expect(screen.queryByText("Finish ✅")).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: /Question 10, blank/ }));
@@ -74,7 +74,7 @@ describe("QuizScreen navigation (review-before-submit model)", () => {
   });
 
   it("shows Finish anywhere once every question is answered", () => {
-    render(<QuizScreen questions={questions} onFinish={vi.fn()} />);
+    render(<QuizScreen questions={questions} onFinish={vi.fn()} onQuit={vi.fn()} />);
 
     for (let i = 0; i < 10; i++) {
       type(String(i));
@@ -87,7 +87,7 @@ describe("QuizScreen navigation (review-before-submit model)", () => {
 
   it("finishes immediately when nothing is blank", () => {
     const onFinish = vi.fn();
-    render(<QuizScreen questions={questions} onFinish={onFinish} />);
+    render(<QuizScreen questions={questions} onFinish={onFinish} onQuit={vi.fn()} />);
 
     for (let i = 0; i < 10; i++) {
       type(String(i));
@@ -102,7 +102,7 @@ describe("QuizScreen navigation (review-before-submit model)", () => {
 
   it("'Keep going' jumps to the first blank question", () => {
     const onFinish = vi.fn();
-    render(<QuizScreen questions={questions} onFinish={onFinish} />);
+    render(<QuizScreen questions={questions} onFinish={onFinish} onQuit={vi.fn()} />);
 
     // Answer Q1 and Q3, leave Q2 blank, go to the end.
     type("1");
@@ -121,7 +121,7 @@ describe("QuizScreen navigation (review-before-submit model)", () => {
 
   it("counts the current typed draft as answered in the blank check", async () => {
     const onFinish = vi.fn();
-    render(<QuizScreen questions={questions} onFinish={onFinish} />);
+    render(<QuizScreen questions={questions} onFinish={onFinish} onQuit={vi.fn()} />);
 
     fireEvent.click(screen.getByRole("button", { name: /Question 10, blank/ }));
     type("99"); // typed but not navigated away

@@ -6,6 +6,8 @@ import ShapeFigure from "./ShapeFigure";
 interface Props {
   questions: Question[];
   onFinish: (answers: (string | null)[], timeUsed: number) => void;
+  /** Abandon the quiz without submitting (PROJECT_PLAN §3.4). */
+  onQuit: () => void;
 }
 
 const DEFAULT_QUESTION_TIME = 15;
@@ -30,8 +32,8 @@ const INPUT_MODES = {
 // only save locally until Finish; Back/Next both keep the typed draft;
 // the always-visible dot strip shows blanks and jumps anywhere; Finish
 // appears on the last question (or once everything's answered) and warns
-// when blanks remain.
-const QuizScreen = ({ questions, onFinish }: Props) => {
+// when blanks remain. There's also a way out that isn't Finish (§3.4).
+const QuizScreen = ({ questions, onFinish, onQuit }: Props) => {
   // Each question carries its own budget: a five-line shopping list
   // can't be read in the 15 seconds a "7 + 5" needs. Fixed for the
   // quiz's lifetime, so the deadlines below can lean on it.
@@ -48,6 +50,7 @@ const QuizScreen = ({ questions, onFinish }: Props) => {
   const [questionTimer, setQuestionTimer] = useState(limits[0]);
   const [totalTimer, setTotalTimer] = useState(totalTime);
   const [confirmingFinish, setConfirmingFinish] = useState(false);
+  const [confirmingQuit, setConfirmingQuit] = useState(false);
   // The backend never sends the correct answer before the quiz is
   // submitted (anti-cheat), so this is just a "your answer was saved"
   // pulse (multiple-choice taps), not a correct/wrong indicator.
@@ -78,6 +81,15 @@ const QuizScreen = ({ questions, onFinish }: Props) => {
     const secondsLeft = Math.max(0, Math.ceil((totalDeadline.current - Date.now()) / 1000));
     onFinish(finalAnswers, totalTime - secondsLeft);
   }, [onFinish, totalTime]);
+
+  // Walking away without submitting. Flipping the same latch `finish`
+  // uses stops the countdown from turning the abandoned answers into a
+  // submission on its next tick.
+  const quit = useCallback(() => {
+    if (finished.current) return;
+    finished.current = true;
+    onQuit();
+  }, [onQuit]);
 
   // Single interval drives both countdowns for the quiz's whole lifetime.
   useEffect(() => {
@@ -196,10 +208,22 @@ const QuizScreen = ({ questions, onFinish }: Props) => {
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="min-h-screen flex flex-col p-4 md:p-6">
-      {/* Timers */}
-      <div className="flex justify-between items-center mb-4">
-        <div className={`font-heading font-bold text-lg px-4 py-2 rounded-xl ${qTimerUrgent ? "bg-destructive text-destructive-foreground animate-pulse" : "bg-card border border-border"}`}>
-          ⏱ {questionTimer}s
+      {/* Timers, with the way out parked beside them */}
+      <div className="flex justify-between items-center gap-2 mb-4">
+        <div className="flex items-center gap-2">
+          {/* §3.4: Finish submits and the clock is the only other exit,
+              which strands a kid who picked the wrong grade. Small and
+              quiet so it isn't mistaken for Next. */}
+          <button
+            onClick={() => setConfirmingQuit(true)}
+            aria-label="Quit this quiz"
+            className="w-10 h-10 shrink-0 rounded-xl border border-border bg-card text-muted-foreground text-lg font-heading hover:border-destructive/50 hover:text-destructive transition-colors"
+          >
+            ✕
+          </button>
+          <div className={`font-heading font-bold text-lg px-4 py-2 rounded-xl ${qTimerUrgent ? "bg-destructive text-destructive-foreground animate-pulse" : "bg-card border border-border"}`}>
+            ⏱ {questionTimer}s
+          </div>
         </div>
         <div
           className={`font-heading font-semibold px-3 py-1 rounded-xl ${
@@ -356,6 +380,46 @@ const QuizScreen = ({ questions, onFinish }: Props) => {
               <QuizButton onClick={goToFirstBlank} primary>Keep going 💪</QuizButton>
               <QuizButton onClick={finish}>Finish anyway ✅</QuizButton>
             </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Quitting throws the attempt away, so it asks first — over the
+          question rather than under it, where a tap can't land on the
+          quiz by accident. The clock keeps running behind it: pausing
+          would hand out free thinking time. */}
+      <AnimatePresence>
+        {confirmingQuit && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/40"
+            onClick={() => setConfirmingQuit(false)}
+          >
+            <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="quit-title"
+              initial={{ scale: 0.9, y: 10 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 10 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-sm p-6 rounded-3xl border-2 border-border bg-card text-center space-y-4 shadow-xl"
+            >
+              <p id="quit-title" className="font-heading font-bold text-lg">
+                🚪 Leave this quiz?
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Your answers won't be saved and this quiz won't count.
+              </p>
+              <div className="flex flex-wrap gap-3 justify-center">
+                <QuizButton onClick={() => setConfirmingQuit(false)} primary>
+                  Keep playing 💪
+                </QuizButton>
+                <QuizButton onClick={quit}>Leave 🚪</QuizButton>
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>

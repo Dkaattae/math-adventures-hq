@@ -90,6 +90,17 @@ const Index = () => {
     if (pendingSubmission) submitAnswers(pendingSubmission.answers, pendingSubmission.timeUsed);
   };
 
+  // Quitting mid-quiz (PROJECT_PLAN §3.4): the attempt is discarded —
+  // nothing is submitted, so it never reaches history or the
+  // leaderboard — and they land back on setup, still logged in.
+  const handleQuit = useCallback(() => {
+    setPendingSubmission(null);
+    setCanRetry(false);
+    setQuizId(null);
+    setQuestions([]);
+    setScreen("setup");
+  }, []);
+
   const handleRedo = () => {
     if (config) startQuiz(config.grade, config.mathType, config.difficulty, config.answerMode);
   };
@@ -111,7 +122,9 @@ const Index = () => {
       {screen === "progress" && (
         <ProgressScreen username={username} onBack={() => setScreen("setup")} />
       )}
-      {screen === "quiz" && <QuizScreen questions={questions} onFinish={handleFinish} />}
+      {screen === "quiz" && (
+        <QuizScreen questions={questions} onFinish={handleFinish} onQuit={handleQuit} />
+      )}
       {screen === "results" && quizResult && (
         <ResultsScreen
           result={quizResult}

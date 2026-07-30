@@ -33,14 +33,14 @@ describe("QuizScreen multiple-choice mode", () => {
   });
 
   it("renders option buttons and no text input", () => {
-    render(<QuizScreen questions={mcQuestions} onFinish={vi.fn()} />);
+    render(<QuizScreen questions={mcQuestions} onFinish={vi.fn()} onQuit={vi.fn()} />);
     expect(screen.queryByPlaceholderText("Your answer...")).toBeNull();
     expect(screen.getByRole("button", { name: "0a" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "0d" })).toBeInTheDocument();
   });
 
   it("records the chosen option and advances to the next question", async () => {
-    render(<QuizScreen questions={mcQuestions} onFinish={vi.fn()} />);
+    render(<QuizScreen questions={mcQuestions} onFinish={vi.fn()} onQuit={vi.fn()} />);
     expect(screen.getByText("Question 1 of 10")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "0b" }));
@@ -51,7 +51,7 @@ describe("QuizScreen multiple-choice mode", () => {
 
   it("finishing early warns about blanks, then submits on Finish anyway", async () => {
     const onFinish = vi.fn();
-    render(<QuizScreen questions={mcQuestions} onFinish={onFinish} />);
+    render(<QuizScreen questions={mcQuestions} onFinish={onFinish} onQuit={vi.fn()} />);
 
     fireEvent.click(screen.getByRole("button", { name: "0c" }));
     await act(() => vi.advanceTimersByTimeAsync(500));
