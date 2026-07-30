@@ -44,6 +44,14 @@ leaderboard.
   factorials and brackets at grade 5 (`9^4 _ 7!`, with a reminder of
   what `!` and `^` mean). Which side goes first is a coin flip, so
   guessing `<` every time never pays.
+- **Percentages, measurement and money & time that scale**: each is
+  several question shapes a quiz rotates through, not one template with
+  bigger numbers. Percentages go from "% of N" to discounts, tips and
+  double-discount sales ("50% off, then another 20% off — not 70%").
+  Measurement moves from a plain conversion to two-step problems
+  (cutting a 3 m ribbon into 50 cm pieces). Money & time reaches the
+  *fewest* coins that make an amount and clock arithmetic that lands on
+  a time ("leaves at 11:10, journey 70 min — when to set off?").
 - **Grade-appropriate topics**: the setup screen only offers topics that
   fit the chosen grade (no long division for Kindergarteners), and the
   🎲 Mixed quiz samples only from unlocked topics.
@@ -113,6 +121,9 @@ leaderboard.
 │       ├── models.py        # Pydantic schemas (match openapi.yaml)
 │       ├── questions.py     # per-type question generators + dedup
 │       ├── word_problems.py # real-life scenes for the word problems
+│       ├── percentages.py  # discount / tip / backwards percentage shapes
+│       ├── measurement.py  # conversions + convert-then-solve shapes
+│       ├── money_time.py   # coins, fewest-coins, clock arithmetic
 │       ├── rotation.py     # deal question shapes from a shuffled deck
 │       ├── storage.py       # DB-backed repository
 │       └── routers/         # users / quizzes / leaderboard

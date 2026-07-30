@@ -1,6 +1,6 @@
 # Math Adventures HQ — Project Plan
 
-_Last updated: 2026-07-29_
+_Last updated: 2026-07-30_
 
 This document collects the roadmap for expanding the quiz, the known bugs
 and rough edges found while auditing the codebase, the testing gaps, and
@@ -13,12 +13,14 @@ Completed work moves to the **Done** section at the bottom.
 
 ### Long term
 
-- **Give the remaining topics the same treatment.** Word problems
-  (2026-07-28) and comparison (2026-07-29) were rebuilt around question
-  *shapes* that grow with the grade. Measurement, money & time and
-  percentages are still one-line templates whose difficulty is only the
-  size of the numbers — the same "a grade-5 question should not be a
-  grade-2 question with bigger digits" critique applies to them.
+- **Every topic is now shape-based.** Word problems (2026-07-28),
+  comparison (2026-07-29), and percentages / measurement / money & time
+  (2026-07-30) were all rebuilt around question *shapes* that grow with
+  the grade rather than just bigger numbers. Arithmetic (addition,
+  subtraction, multiplication, division), fractions, order-of-operations
+  and algebra stay single-form on purpose — the operation *is* the skill
+  there, and difficulty genuinely is the size of the numbers. If any of
+  those later feels flat at grade 5, the shape treatment is the template.
 - Printable worksheet export (the generators already produce clean
   question/answer pairs).
 - Practice mode (untimed) vs. challenge mode (streaks; the `badge` field
@@ -114,13 +116,14 @@ findings, ordered by impact:
   and each user's quiz history (via `query_user_stats`). Consider a
   dedicated history/attempts table, or rename to reflect that it's an
   attempts log the leaderboard reads from.
-- **Split `questions.py`** (~1700 lines and still growing — the
-  comparison expressions added ~200) into a package:
+- **Split `questions.py`** into a package:
   `questions/arithmetic.py`, `fractions.py`, `order_of_ops.py`,
   `comparison.py`, `geometry_data.py`, `distractors.py`, etc., behind
-  the same `generate_questions` facade. `word_problems.py` and
-  `rotation.py` are already out and show the shape of it; comparison is
-  the obvious next one to lift.
+  the same `generate_questions` facade. Five topic modules are already
+  out — `word_problems.py`, `percentages.py`, `measurement.py`,
+  `money_time.py`, plus the shared `rotation.py` — which has pulled the
+  file back under ~1400 lines and shows the shape of the rest.
+  Comparison (still inline, ~250 lines) is the obvious next lift.
 - **Tune difficulty scaling per topic.** `_difficulty_range` is linear in
   grade for every type; multiplication should probably cap factors near
   12 (times tables) regardless of range, and fractions difficulty is
@@ -141,6 +144,43 @@ findings, ordered by impact:
 ## Done
 
 Completed items, newest first.
+
+### 2026-07-30 — percentages, measurement, money & time became shape-based
+
+- **The last three one-line-template topics got the treatment.** Each
+  was a single question form whose only difficulty knob was the size of
+  the numbers — grade 5 percentages was "What is 10% of 350?", grade 5
+  money was "a sticker costs 70¢ and you pay 100¢". Each is now several
+  question *shapes* that a quiz rotates through (via the shared
+  `rotation.py`), moving from the plain skill at the entry grade to
+  reasoning and real-life multi-step problems higher up.
+- **Percentages** (`percentages.py`, 7 shapes): the plain "% of N", then
+  running it backwards ("9 of 12 — what percent?", "20% of a number is
+  15 — what number?"), then the everyday ones — a discount (price
+  *after* the cut, not the saving), a tip (a total that goes *up*), a
+  double discount ("50% off, then another 20% off the sale price" — and
+  no, that isn't 70% off), and choosing the better of two coupons.
+- **Measurement** (`measurement.py`, 9 shapes): plain conversion, then
+  picking the right unit for a thing, comparing two measurements written
+  in different units, and — the point — problems where converting is
+  only step one: cutting a 3 m ribbon into 50 cm pieces, how much juice
+  is left after pouring, laps of a track. Containers only ever hold
+  something they plausibly could (a jug holds liters, not kilometers).
+- **Money & time** (`money_time.py`, 12 shapes): past counting coins to
+  the *fewest* coins that make an amount (the skill a till uses) and
+  "have you enough?", and past "how long between?" to clock arithmetic
+  that lands on a time — what time it finishes, when to leave, total
+  duration across the hour. Time answers write like `5:20`; `grade_answer`
+  now accepts `05:20` too.
+- **US spelling throughout.** The measurement rewrite surfaced that
+  `word_problems.py` had crept into UK spelling (metres, litres) in an
+  app that otherwise uses dollars, quarters and feet — fixed everywhere.
+- `test_topic_depth.py` (40+ cases) pins the tier ladders and
+  re-derives every answer independently — brute-forcing the true minimum
+  for fewest-coins, recomputing discounts and conversions from the
+  question text — so a generator bug can't hide behind its own
+  arithmetic. Two older tests that had gone template-specific were
+  updated to the new shapes.
 
 ### 2026-07-29 — comparison compares expressions, not just numbers
 

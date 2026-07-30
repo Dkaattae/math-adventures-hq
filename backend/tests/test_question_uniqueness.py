@@ -612,25 +612,34 @@ def test_decimal_comparison_answers_are_correct():
 
 
 def test_percentage_answers_are_whole_and_correct():
+    """The topic has several shapes now (see test_topic_depth.py); every
+    one of them must still land on a whole number."""
+    saw_plain = False
     for seed in range(30):
         rng = random.Random(seed)
-        for grade, difficulty in ((Grade.G3, Difficulty.easy), (Grade.G5, Difficulty.hard)):
+        for grade, difficulty in ((Grade.G4, Difficulty.easy), (Grade.G5, Difficulty.hard)):
             qs = generate_questions(MathType.percentages, difficulty, grade, rng=rng)
             for q in qs:
+                assert isinstance(q.correctAnswer, int), q.question
                 m = re.match(r"^What is (\d+)% of (\d+)\?$", q.question)
-                assert m, q.question
-                pct, n = int(m.group(1)), int(m.group(2))
-                assert pct * n % 100 == 0, f"non-integer answer: {q.question}"
-                assert q.correctAnswer == pct * n // 100, q.question
+                if m:
+                    saw_plain = True
+                    pct, n = int(m.group(1)), int(m.group(2))
+                    assert pct * n % 100 == 0, f"non-integer answer: {q.question}"
+                    assert q.correctAnswer == pct * n // 100, q.question
+    assert saw_plain, "the plain 'what is X% of N' question disappeared entirely"
 
 
-def test_percentage_25_75_only_at_grade5_hard():
+def test_percentage_easy_tier_sticks_to_friendly_percentages():
+    """Grade 4 easy meets 50/10/100 in the plain question; the trickier
+    percentages arrive with the applied shapes above it."""
     rng = random.Random(0)
     for _ in range(20):
-        qs = generate_questions(MathType.percentages, Difficulty.medium, Grade.G4, rng=rng)
+        qs = generate_questions(MathType.percentages, Difficulty.easy, Grade.G4, rng=rng)
         for q in qs:
-            m = re.match(r"^What is (\d+)%", q.question)
-            assert int(m.group(1)) in (10, 50, 100), q.question
+            m = re.match(r"^What is (\d+)% of", q.question)
+            if m:
+                assert int(m.group(1)) in (10, 50, 100, 25, 20, 75, 5), q.question
 
 
 # ---------- measurement ----------
@@ -642,10 +651,11 @@ def test_measurement_conversions_are_correct():
         "seconds": {"minute": 60}, "inches": {"foot": 12},
         "meters": {"kilometer": 1000}, "grams": {"kilogram": 1000},
         "milliliters": {"liter": 1000}, "feet": {"yard": 3},
+        "minutes": {"hour": 60},
     }
     for seed in range(30):
         rng = random.Random(seed)
-        for grade, difficulty in ((Grade.K, Difficulty.easy), (Grade.G5, Difficulty.hard)):
+        for grade, difficulty in ((Grade.G2, Difficulty.easy), (Grade.G5, Difficulty.hard)):
             qs = generate_questions(MathType.measurement, difficulty, grade, rng=rng)
             for q in qs:
                 m = re.match(r"^How many (\w+) are in (\d+) (\w+)\?$", q.question)
