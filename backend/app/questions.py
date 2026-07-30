@@ -21,7 +21,7 @@ import re
 from math import factorial, gcd
 from typing import Callable, NamedTuple
 
-from . import word_problems
+from . import measurement, money_time, percentages, word_problems
 from .rotation import rotating
 from .models import AnswerKind, AnswerMode, Difficulty, Grade, MathType, QuestionInternal
 
@@ -880,101 +880,6 @@ def _comparison_tier(difficulty: Difficulty, g: int) -> str:
     return "basic"
 
 
-# ---------- money & time ----------
-#
-# Money stays in whole cents so kids never have to type a decimal point.
-
-_COINS = [("quarter", "quarters", 25), ("dime", "dimes", 10), ("nickel", "nickels", 5), ("penny", "pennies", 1)]
-
-
-def _money_coins(rng: random.Random, lo: int, hi: int, *, coin_pool: slice = slice(1, 4)):
-    # Two distinct coin types with small counts.
-    pool = _COINS[coin_pool]
-    (name1, plural1, val1), (name2, plural2, val2) = rng.sample(pool, 2)
-    c1, c2 = rng.randint(1, 4), rng.randint(1, 4)
-    total = c1 * val1 + c2 * val2
-    w1 = name1 if c1 == 1 else plural1
-    w2 = name2 if c2 == 1 else plural2
-    return (
-        ("coins", val1, c1, val2, c2),
-        f"You have {c1} {w1} and {c2} {w2}. How many cents is that?",
-        total,
-        f"{c1} × {val1}¢ + {c2} × {val2}¢ = {total}¢! 💰",
-    )
-
-
-def _money_coins_easy(rng: random.Random, lo: int, hi: int):
-    return _money_coins(rng, lo, hi, coin_pool=slice(1, 4))  # dimes/nickels/pennies
-
-
-def _money_coins_full(rng: random.Random, lo: int, hi: int):
-    return _money_coins(rng, lo, hi, coin_pool=slice(0, 4))  # quarters too
-
-
-def _money_change(rng: random.Random, lo: int, hi: int):
-    paid = rng.choice([25, 50, 100])
-    price = rng.randint(1, paid - 1)
-    return (
-        ("change", price, paid),
-        f"A sticker costs {price}¢ and you pay {paid}¢. How many cents of change do you get?",
-        paid - price,
-        f"{paid}¢ - {price}¢ = {paid - price}¢ change! 💰",
-    )
-
-
-def _time_hours_to_minutes(rng: random.Random, lo: int, hi: int):
-    h = rng.randint(2, 9)
-    return (
-        ("h2m", h),
-        f"How many minutes are in {h} hours?",
-        h * 60,
-        f"Each hour has 60 minutes: {h} × 60 = {h * 60}! ⏰",
-    )
-
-
-def _time_to_next_hour(rng: random.Random, lo: int, hi: int):
-    h = rng.randint(1, 11)
-    m = rng.choice([5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55])
-    return (
-        ("tonext", h, m),
-        f"How many minutes is it from {h}:{m:02d} to {h + 1}:00?",
-        60 - m,
-        f"From {h}:{m:02d} up to {h + 1}:00 is 60 - {m} = {60 - m} minutes! ⏰",
-    )
-
-
-def _time_elapsed(rng: random.Random, lo: int, hi: int):
-    h1 = rng.randint(1, 9)
-    m1 = rng.choice([0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55])
-    hours = rng.randint(1, 2)
-    m2 = rng.choice([0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55])
-    h2 = h1 + hours
-    answer = hours * 60 + (m2 - m1)
-    return (
-        ("elapsed", h1, m1, h2, m2),
-        f"How many minutes is it from {h1}:{m1:02d} to {h2}:{m2:02d}?",
-        answer,
-        f"From {h1}:{m1:02d} to {h2}:{m2:02d} is {answer} minutes. "
-        f"Count the full hours first, then the extra minutes! ⏰",
-    )
-
-
-def _make_money_time_basic(rng: random.Random, lo: int, hi: int):
-    return rng.choice([_money_coins_easy, _time_hours_to_minutes])(rng, lo, hi)
-
-
-def _make_money_time_intermediate(rng: random.Random, lo: int, hi: int):
-    return rng.choice(
-        [_money_coins_easy, _money_change, _time_hours_to_minutes, _time_to_next_hour]
-    )(rng, lo, hi)
-
-
-def _make_money_time_advanced(rng: random.Random, lo: int, hi: int):
-    return rng.choice(
-        [_money_coins_full, _money_change, _time_to_next_hour, _time_elapsed]
-    )(rng, lo, hi)
-
-
 # ---------- decimals: exact arithmetic in integer tenths/hundredths ----------
 
 
@@ -1059,111 +964,6 @@ def _make_decimals_basic(rng: random.Random, lo: int, hi: int):
 def _make_decimals_advanced(rng: random.Random, lo: int, hi: int):
     return rng.choice(
         [_dec_add_tenths, _dec_sub_tenths, _dec_add_hundredths, _dec_compare, _dec_times_ten]
-    )(rng, lo, hi)
-
-
-# ---------- percentages: percent of a number, always whole answers ----------
-
-# (percent, required multiple) — n is drawn as a multiple so the answer is whole.
-_PCT_BASIC = [(50, 2), (10, 10), (100, 1)]
-_PCT_FULL = _PCT_BASIC + [(25, 4), (20, 5), (75, 4)]
-
-
-def _pct_of(rng: random.Random, lo: int, hi: int, *, table: list[tuple[int, int]]):
-    pct, multiple = rng.choice(table)
-    n = multiple * rng.randint(1, max(10, hi))
-    answer = pct * n // 100
-    return (
-        ("pct", pct, n),
-        f"What is {pct}% of {n}?",
-        answer,
-        f"{pct}% means {pct} out of every 100: {pct}% of {n} = {answer}! 💯",
-    )
-
-
-def _make_percentages_basic(rng: random.Random, lo: int, hi: int):
-    return _pct_of(rng, lo, hi, table=_PCT_BASIC)
-
-
-def _make_percentages_advanced(rng: random.Random, lo: int, hi: int):
-    return _pct_of(rng, lo, hi, table=_PCT_FULL)
-
-
-# ---------- measurement conversions ----------
-
-# (factor, small unit plural, big unit singular, big unit plural)
-_CONVERSIONS_BASIC = [
-    (100, "centimeters", "meter", "meters"),
-    (10, "millimeters", "centimeter", "centimeters"),
-    (60, "seconds", "minute", "minutes"),
-    (12, "inches", "foot", "feet"),
-]
-_CONVERSIONS_FULL = _CONVERSIONS_BASIC + [
-    (1000, "meters", "kilometer", "kilometers"),
-    (1000, "grams", "kilogram", "kilograms"),
-    (1000, "milliliters", "liter", "liters"),
-    (3, "feet", "yard", "yards"),
-]
-
-
-def _meas_big_to_small(rng: random.Random, lo: int, hi: int, *, table: list):
-    factor, small, big_one, big_many = rng.choice(table)
-    k = rng.randint(2, 9)
-    return (
-        ("meas", factor, small, k),
-        f"How many {small} are in {k} {big_many}?",
-        k * factor,
-        f"1 {big_one} = {factor} {small}, so {k} {big_many} = {k} × {factor} = {k * factor}! 📏",
-    )
-
-
-def _meas_small_to_big(rng: random.Random, lo: int, hi: int):
-    factor, small, big_one, big_many = rng.choice(_CONVERSIONS_FULL)
-    k = rng.randint(2, 9)
-    total = k * factor
-    return (
-        ("measrev", factor, small, k),
-        f"{total} {small} is how many {big_many}?",
-        k,
-        f"Divide by {factor}: {total} ÷ {factor} = {k} {big_many}! 📏",
-    )
-
-
-def _meas_mixed(rng: random.Random, lo: int, hi: int):
-    factor, small, big_one, big_many = rng.choice(
-        [c for c in _CONVERSIONS_FULL if c[0] in (100, 60, 12)]
-    )
-    k = rng.randint(1, 5)
-    extra = rng.randint(1, factor - 1)
-    big_word = big_one if k == 1 else big_many
-    return (
-        ("measmix", factor, small, k, extra),
-        f"How many {small} is {k} {big_word} and {extra} {small}?",
-        k * factor + extra,
-        f"{k} × {factor} = {k * factor}, plus {extra} more = {k * factor + extra}! 📏",
-    )
-
-
-def _make_measurement_basic(rng: random.Random, lo: int, hi: int):
-    return _meas_big_to_small(rng, lo, hi, table=_CONVERSIONS_BASIC)
-
-
-def _make_measurement_intermediate(rng: random.Random, lo: int, hi: int):
-    return rng.choice(
-        [
-            lambda r, a, b: _meas_big_to_small(r, a, b, table=_CONVERSIONS_FULL),
-            _meas_small_to_big,
-        ]
-    )(rng, lo, hi)
-
-
-def _make_measurement_advanced(rng: random.Random, lo: int, hi: int):
-    return rng.choice(
-        [
-            lambda r, a, b: _meas_big_to_small(r, a, b, table=_CONVERSIONS_FULL),
-            _meas_small_to_big,
-            _meas_mixed,
-        ]
     )(rng, lo, hi)
 
 
@@ -1478,11 +1278,11 @@ def _pick_factory(math_type: MathType, difficulty: Difficulty, grade: Grade) -> 
         return rotating(_COMPARISON_TIERS[tier], tier)
 
     if math_type == MathType.money_time:
-        if difficulty == Difficulty.hard and g >= 3:
-            return _make_money_time_advanced
-        if g >= 2 and difficulty != Difficulty.easy:
-            return _make_money_time_intermediate
-        return _make_money_time_basic
+        return money_time.tier_factory(
+            money_time.tier_for(
+                difficulty == Difficulty.easy, difficulty == Difficulty.hard, g
+            )
+        )
 
     if math_type == MathType.decimals:
         if difficulty == Difficulty.hard and g >= 4:
@@ -1490,16 +1290,16 @@ def _pick_factory(math_type: MathType, difficulty: Difficulty, grade: Grade) -> 
         return _make_decimals_basic
 
     if math_type == MathType.percentages:
-        if difficulty == Difficulty.hard and g >= 5:
-            return _make_percentages_advanced
-        return _make_percentages_basic
+        return percentages.tier_factory(
+            percentages.tier_for(difficulty == Difficulty.easy, g)
+        )
 
     if math_type == MathType.measurement:
-        if difficulty == Difficulty.hard and g >= 4:
-            return _make_measurement_advanced
-        if g >= 3 and difficulty != Difficulty.easy:
-            return _make_measurement_intermediate
-        return _make_measurement_basic
+        return measurement.tier_factory(
+            measurement.tier_for(
+                difficulty == Difficulty.easy, difficulty == Difficulty.hard, g
+            )
+        )
 
     return {
         MathType.addition: _make_addition,
@@ -1707,6 +1507,19 @@ def generate_questions(
 _ANSWER_UNITS = ("dollars", "dollar", "cents", "cent", "minutes", "minute")
 
 
+_CLOCK_RE = re.compile(r"^(\d{1,2}):(\d{2})$")
+
+
+def _normalize_clock(s: str) -> str | None:
+    """"05:20" and "5:20" are the same time to everyone but a string
+    comparison, and a kid reading a digital clock may type either."""
+    m = _CLOCK_RE.match(s.strip())
+    if not m:
+        return None
+    hour, minute = int(m.group(1)), m.group(2)
+    return f"{hour}:{minute}" if 0 <= hour <= 24 else None
+
+
 def _parse_number(s: str) -> float | None:
     cleaned = s.strip().lower().lstrip("$").replace(",", "").strip()
     for unit in _ANSWER_UNITS:
@@ -1801,6 +1614,9 @@ def grade_answer(correct: int | str, user: str | None) -> bool:
     correct_stripped = str(correct).strip()
     if user_stripped.lower() == correct_stripped.lower():
         return True
+    correct_clock = _normalize_clock(correct_stripped)
+    if correct_clock is not None:
+        return _normalize_clock(user_stripped) == correct_clock
     if "/" not in correct_stripped:
         correct_num = _parse_number(correct_stripped)
         user_num = _parse_number(user_stripped)

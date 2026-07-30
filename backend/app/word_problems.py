@@ -296,7 +296,7 @@ COUNT_SCENES: tuple[CountScene, ...] = (
         ),
         flavour=(
             "The sale starts right after lunch.",
-            "The table is 2 metres long.",
+            "The table is 2 meters long.",
             "The money goes to the school garden.",
         ),
     ),
@@ -745,7 +745,7 @@ RULE_SCENES: tuple[RuleScene, ...] = (
         verb="used", unit="tokens",
         rules=(("roller coaster rides", "roller coaster ride", 6), ("carousel rides", "carousel ride", 2),
                ("bumper car rides", "bumper car ride", 4), ("ghost train rides", "ghost train ride", 5)),
-        flavour=("The funfair is in town for a week.", "The big wheel is 30 metres tall.",
+        flavour=("The funfair is in town for a week.", "The big wheel is 30 meters tall.",
                  "The fair closes at 10."),
     ),
     RuleScene(
