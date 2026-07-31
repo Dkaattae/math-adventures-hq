@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from .db_models import LeaderboardRow, QuizResultRow, QuizRow, SessionRow, UserRow
@@ -293,10 +293,28 @@ def quiz_questions(row: QuizRow) -> list[QuestionInternal]:
     return [_question_from_json(d) for d in row.questions_json]
 
 
-def mark_submitted(db: Session, quiz_id: UUID, result: QuizResult) -> None:
-    quiz = db.get(QuizRow, quiz_id)
-    assert quiz is not None
-    quiz.submitted = True
+def mark_submitted(db: Session, quiz_id: UUID, result: QuizResult) -> bool:
+    """Claim a quiz for this submission. False = someone else got there.
+
+    The router checks `row.submitted` before grading, but that check and
+    this write are separate steps: two submits of the same quiz — a
+    double-tap, a retry racing a slow first request — can both pass the
+    check and each write a result and a leaderboard row. So the claim is
+    a conditional UPDATE ... WHERE submitted = false, which the database
+    resolves atomically: whoever loses matches no rows and gets False
+    back, and the caller turns that into the same 409 the early check
+    raises. On Postgres the second UPDATE blocks on the first's row lock
+    and re-reads the row after it commits, so the race is closed rather
+    than narrowed.
+    """
+    claimed = db.execute(
+        update(QuizRow)
+        .where(QuizRow.id == quiz_id, QuizRow.submitted.is_(False))
+        .values(submitted=True)
+    ).rowcount
+    if not claimed:
+        db.rollback()
+        return False
     db.add(
         QuizResultRow(
             quiz_id=quiz_id,
@@ -310,6 +328,7 @@ def mark_submitted(db: Session, quiz_id: UUID, result: QuizResult) -> None:
         )
     )
     db.commit()
+    return True
 
 
 # ---------- leaderboard ----------

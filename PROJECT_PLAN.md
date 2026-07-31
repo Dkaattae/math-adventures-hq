@@ -1,6 +1,6 @@
 # Math Adventures HQ — Project Plan
 
-_Last updated: 2026-07-30_
+_Last updated: 2026-07-31_
 
 This document collects the roadmap for expanding the quiz, the known bugs
 and rough edges found while auditing the codebase, the testing gaps, and
@@ -25,6 +25,26 @@ Completed work moves to the **Done** section at the bottom.
   question/answer pairs).
 - Practice mode (untimed) vs. challenge mode (streaks; the `badge` field
   already exists end to end).
+- **Compete mode** (asked 2026-07-31; sketched, not scheduled). Racing
+  another player is feasible without WebSockets: one answer lands every
+  15–60s, so a 2s poll of a match endpoint reads as live, and React Query
+  is already in the app. WebSockets would also cost more than they look —
+  the container runs one uvicorn process (`Dockerfile:44`), so in-process
+  match state breaks the moment Railway runs a second replica, whereas
+  polling reads shared Postgres. Three rungs, cheapest first:
+  a **computer opponent** (pure front end: a timer that advances with a
+  per-question accuracy probability, paced off the existing
+  `timeLimitSeconds`); a **ghost race** against a recorded run (needs
+  per-question timings stored, which today they aren't — but no lobby, no
+  disconnect handling); and **live PvP**, where the cost is not the
+  transport but the match model (both players need the *same* ten
+  questions, so generation moves up to a `match` row), a room code to pair
+  without notifications, a start barrier, and forfeit rules. Note the
+  design tension: the app deliberately withholds correctness until
+  submit, so a sudden-death "first wrong loses" mode has to grade each
+  answer immediately and gives up review-before-submit — while
+  score/speed modes keep the current flow and show only the opponent's
+  position. Don't split the screen; mirror the existing dot strip.
 - ~~More visual questions~~ — done 2026-07-30: angles, symmetry and
   labelled perimeter/area rectangles, on the same grade ladder as the
   text questions. Still open beyond that: composite figures, angle
@@ -34,10 +54,27 @@ Completed work moves to the **Done** section at the bottom.
 
 ## 2. Known bugs & issues
 
-**Empty.** Every item from the 2026-07-15 audit has landed — the last
-two (unauthenticated stats and the open username namespace) shipped on
-2026-07-20; see Done. New findings go here as they're spotted; the next
-audit is worth running once §3 is cleared.
+Every item from the 2026-07-15 audit has landed — the last two
+(unauthenticated stats and the open username namespace) shipped on
+2026-07-20; see Done. One low-severity finding is open, from writing the
+§4 API coverage:
+
+1. **A repeatedly down-levelled quiz can repeat questions.** Grade
+   gating is advisory: the setup screen only offers topics that suit the
+   grade and 🎲 Mixed samples only unlocked ones, but `POST /api/quizzes`
+   accepts any grade/topic pair — and it has to, because `next_level`
+   steps the grade down without knowing the topic's entry grade, so the
+   app itself asks for e.g. grade-1 multiplication after a few weak
+   scores. Down there the value space is too small for ten distinct
+   questions, and the generator is documented to repeat rather than loop
+   (`test_small_space_falls_back_gracefully`), so a kid can see the same
+   question twice. Measured: multiplication at K/easy gets as few as
+   3 distinct out of 10, grade 1 easy 7 of 10; division 4 and 8. Only
+   those two topics, only at `easy`, and only after several consecutive
+   down-steps. The fix is a level ladder that won't recommend a topic
+   below the grade it's offered at — which is also the pedagogically
+   right answer, since grade-1 multiplication isn't a rescue for a kid
+   struggling at grade 2.
 
 ---
 
@@ -65,10 +102,17 @@ ordered by impact:
 
 ### Backend
 
-- **API-level coverage for new types.** Existing tests call
-  `generate_questions()` directly; only `addition` is exercised through
-  `POST /api/quizzes` → submit. Add a parametrized round-trip test across
-  all fourteen `MathType`s.
+**All clear as of 2026-07-31** — the four items below have landed and the
+remaining gaps are all front-end. Two of the four turned up a real fix,
+not just missing coverage.
+
+- ~~**API-level coverage for new types**~~ — done 2026-07-31.
+  `test_api_all_topics.py` drives all fifteen `MathType`s (including
+  `mixed`) through `POST /api/quizzes` → submit, at each topic's entry
+  grade and at grade 5, in both answer modes: creation shape, no answer
+  key on the wire, four distinct options that a tap can actually grade,
+  a perfect run, a zero run, and the leaderboard + history rows a
+  finished quiz leaves behind.
 - ~~**Property-based answer verification**~~ — done 2026-07-30. Every
   question printed by the eight arithmetic topics is parsed and re-solved
   by `test_answer_verification.py`, which shares no code with the
@@ -80,9 +124,16 @@ ordered by impact:
   as well as tests: ordering had no third key, so rows tied on score
   *and* time came back in whatever order the database chose. Earliest
   achievement now wins the tie.
-- **Double-submit race** — the `submitted` flag is checked and set in
-  separate steps; two concurrent submits can both pass the check. Needs a
-  row-level guard (e.g. conditional UPDATE) and a test.
+- ~~**Double-submit race**~~ — done 2026-07-31. `mark_submitted` now
+  claims the quiz with `UPDATE ... WHERE submitted = false` and returns
+  whether it won; the loser gets the same 409 the early check raises.
+  What the race actually did before the fix was slightly different from
+  the guess above: `quiz_results.quiz_id` is a primary key, so the
+  database *did* stop the second result row — but by raising
+  `IntegrityError` out of the endpoint as a 500, and only because of
+  that constraint rather than by intent. `test_double_submit.py` drives
+  the interleaving deliberately (a rival submit commits on its own
+  session mid-grading) instead of hoping threads collide.
 
 ### Frontend
 
@@ -144,6 +195,38 @@ ordered by impact:
 ## Done
 
 Completed items, newest first.
+
+### 2026-07-31 — the backend testing gaps closed, and the fix one of them needed
+
+- **Every topic now runs through the real API, not just the generator.**
+  `test_api_all_topics.py` parametrizes all fifteen `MathType`s over
+  `POST /api/quizzes` → `submit`, at each topic's entry grade and again
+  at grade 5, in both answer modes. It checks the things that only exist
+  between the generator and the player: answers that are sometimes ints
+  and sometimes strings surviving JSON, the answer key and explanation
+  staying off the wire until submission, `answerKind` and
+  `timeLimitSeconds` being present and sane, four distinct options per
+  multiple-choice question with the correct one among them *formatted so
+  a tap grades right*, a perfect run scoring 10 and a nonsense run
+  scoring 0, and the leaderboard row + history entry a finished quiz
+  leaves behind (including that each row can be found by its own filter).
+- **Double submits can't both win.** `mark_submitted` claims the quiz
+  with a conditional `UPDATE ... WHERE submitted = false` and reports
+  whether it won; the router turns a lost claim into the same 409 the
+  early check raises, before writing a leaderboard row. Worth recording
+  what the bug actually was, since it wasn't quite what §4 predicted:
+  `quiz_results.quiz_id` is a primary key, so the *database* already
+  stopped the duplicate result row — but by raising `IntegrityError`
+  straight out of the endpoint (a 500 to the player, on a retry that was
+  already anxious), and only as a side effect of that constraint rather
+  than by design. The tests drive the interleaving on purpose — a rival
+  submit commits on its own session while the first request is grading —
+  rather than hoping two threads collide, and they fail if the
+  conditional update is reverted.
+- Writing the coverage turned up one low-severity finding, now §2.1:
+  grade gating is advisory, `next_level` can walk a topic below the grade
+  it's offered at, and down there the value space is too small for ten
+  distinct questions.
 
 ### 2026-07-30 — leaderboard context, a way out of a quiz, and answers checked twice
 
