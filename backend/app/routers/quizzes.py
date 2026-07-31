@@ -161,7 +161,18 @@ def submit_quiz(
             direction=direction.value, grade=rec_grade, difficulty=rec_difficulty
         ),
     )
-    storage.mark_submitted(db, quiz_id, result)
+    # The `row.submitted` check above is a fast path, not the guard: a
+    # second submit can slip past it while this one is still grading.
+    # Claiming the quiz is what actually decides, and losing that claim
+    # means the other request owns the result — so bail before writing a
+    # duplicate leaderboard row.
+    if not storage.mark_submitted(db, quiz_id, result):
+        raise HTTPException(
+            status_code=409,
+            detail=ErrorResponse(
+                code="already_submitted", message="Quiz has already been submitted."
+            ).model_dump(),
+        )
     storage.add_leaderboard_entry(
         db,
         LeaderboardEntry(
