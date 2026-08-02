@@ -60,6 +60,9 @@ def _question_to_json(q: QuestionInternal) -> dict:
         "explanation": q.explanation,
         "options": q.options,
         "figure": q.figure,
+        # Kept so a question in a mixed quiz still knows which topic's
+        # clock it should get when the quiz is read back.
+        "topic": q.topic.value if q.topic else None,
     }
 
 

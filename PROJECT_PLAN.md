@@ -281,6 +281,42 @@ not just missing coverage.
 
 Completed items, newest first.
 
+### 2026-07-31 — per-question timers moved into a table, and lengthened
+
+- **The clock is now data, not a formula.** Budgets used to be computed
+  inside `questions.py` — a 15-second base plus a word count — with no
+  way to say "word problems need longer" without editing logic, and no
+  way to see all the numbers at once. `app/question_times.py` holds the
+  whole map keyed by **topic × grade × difficulty**, plus the four global
+  knobs (floor, cap, free-word allowance, seconds per power/factorial).
+  A budget is `topic base for the grade + difficulty adjustment +
+  reading bonus + thinking bonus`, clamped. `time_limit_seconds()` is now
+  a thin wrapper over it, and the table is read at request time, so a
+  retune reaches quizzes that were already created but not yet played.
+- **Word problems 15s → 30s, comparison 15s → 30s from grade 3.** Both
+  were reported as too fast in play. Word problems now start at 30 at
+  every level (hard +5), and longer scenes still earn a second per extra
+  word on top, so a 60-word grade-5 list lands near 65s. Comparison keeps
+  15s at K–2, where it's "which of these numbers is biggest", and gets 30
+  from grade 3, where it becomes "work out both sides, then compare";
+  powers and factorials add their usual 10s each. Geometry at grades 4–5
+  went to 20s, since reading a labelled figure comes before the
+  arithmetic. Everything else is unchanged at 15.
+- **Mixed quizzes needed a fix to make this work.** Their ten questions
+  each come from a different topic, so a word problem in a mixed quiz
+  would have been served the `mixed` budget. `QuestionInternal` now
+  carries the topic that produced it, stored alongside the question, and
+  the API prefers it over the quiz's own. Quizzes stored before this
+  fall back to the quiz topic rather than breaking.
+- `test_question_times.py` pins the table's shape (every `MathType` must
+  appear, so a new topic can't inherit a default nobody chose), the two
+  numbers that prompted the change, that the eight one-line arithmetic
+  topics still get exactly 15, and — because a table the endpoint doesn't
+  read is just a document — the budgets as actually served by
+  `POST /api/quizzes`, including a word problem inside a mixed quiz. A
+  guard rail test keeps any future edit from pushing a whole quiz past
+  12 minutes.
+
 ### 2026-07-31 — the backend testing gaps closed, and the fix one of them needed
 
 - **Every topic now runs through the real API, not just the generator.**

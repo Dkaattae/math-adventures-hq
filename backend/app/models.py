@@ -132,6 +132,11 @@ class QuestionInternal(Question):
     """Question plus correct answer / explanation — never returned on GET /quizzes."""
     correctAnswer: Union[int, str]
     explanation: str
+    # Which topic actually produced this question. Equal to the quiz's
+    # topic except in a 🎲 Mixed quiz, where every question comes from a
+    # different one — and a word problem needs its own clock whichever
+    # quiz it turns up in. None on quizzes stored before this existed.
+    topic: Optional[MathType] = None
 
 
 class QuestionResult(BaseModel):

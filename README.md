@@ -67,9 +67,14 @@ leaderboard.
   button, and returning players' setup screen pre-selects a level from
   their recent history — per topic, so being great at addition doesn't
   start fractions on hard.
-- **Timed quizzes**: 15 seconds for a one-line question, more for a
-  word-problem scene that has to be read (the whole-quiz clock is the sum
-  of its questions plus a little slack). A tappable
+- **Timed quizzes**: every question carries its own clock, from a table
+  in `backend/app/question_times.py` keyed by topic, grade and
+  difficulty — 15 seconds for a one-line sum, 30 for a word-problem
+  scene or a grade-3-and-up comparison, plus a second per word of
+  reading past 25 and 10 seconds for each power or factorial to work
+  out. The whole-quiz clock is the sum of its questions plus a little
+  slack. Retuning any of it is one edit to that file; the numbers are
+  pinned by `backend/tests/test_question_times.py`. A tappable
   dot strip shows which questions are answered and jumps anywhere; Back
   and Next keep your typed answer, and finishing with blanks asks first.
   The last 30 seconds are flagged in colour *and* words before the quiz
