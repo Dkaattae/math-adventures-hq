@@ -1,6 +1,6 @@
 # Math Adventures HQ — Project Plan
 
-_Last updated: 2026-07-31_
+_Last updated: 2026-08-03_
 
 This document collects the roadmap for expanding the quiz, the known bugs
 and rough edges found while auditing the codebase, the testing gaps, and
@@ -133,27 +133,10 @@ Completed work moves to the **Done** section at the bottom.
 
 ## 2. Known bugs & issues
 
-Every item from the 2026-07-15 audit has landed — the last two
-(unauthenticated stats and the open username namespace) shipped on
-2026-07-20; see Done. One low-severity finding is open, from writing the
-§4 API coverage:
-
-1. **A repeatedly down-levelled quiz can repeat questions.** Grade
-   gating is advisory: the setup screen only offers topics that suit the
-   grade and 🎲 Mixed samples only unlocked ones, but `POST /api/quizzes`
-   accepts any grade/topic pair — and it has to, because `next_level`
-   steps the grade down without knowing the topic's entry grade, so the
-   app itself asks for e.g. grade-1 multiplication after a few weak
-   scores. Down there the value space is too small for ten distinct
-   questions, and the generator is documented to repeat rather than loop
-   (`test_small_space_falls_back_gracefully`), so a kid can see the same
-   question twice. Measured: multiplication at K/easy gets as few as
-   3 distinct out of 10, grade 1 easy 7 of 10; division 4 and 8. Only
-   those two topics, only at `easy`, and only after several consecutive
-   down-steps. The fix is a level ladder that won't recommend a topic
-   below the grade it's offered at — which is also the pedagogically
-   right answer, since grade-1 multiplication isn't a rescue for a kid
-   struggling at grade 2.
+**Empty.** Every item from the 2026-07-15 audit has landed, and the four
+found in play on 2026-08-03 — repeated questions from two different
+causes, and two multiple-choice faults — shipped the same day; see Done.
+New findings go here as they're spotted.
 
 ---
 
@@ -254,10 +237,11 @@ not just missing coverage.
   the same run — exactly the confusion this item is about.
 - **Split `questions.py`** into a package:
   `questions/arithmetic.py`, `fractions.py`, `order_of_ops.py`,
-  `comparison.py`, `geometry_data.py`, `distractors.py`, etc., behind
-  the same `generate_questions` facade. Five topic modules are already
+  `comparison.py`, `geometry_data.py`, etc., behind
+  the same `generate_questions` facade. Seven modules are already
   out — `word_problems.py`, `percentages.py`, `measurement.py`,
-  `money_time.py`, plus the shared `rotation.py` — which has pulled the
+  `money_time.py`, `distractors.py`, `question_times.py`, plus the
+  shared `rotation.py` — which has pulled the
   file back under ~1400 lines and shows the shape of the rest.
   Comparison (still inline, ~250 lines) is the obvious next lift.
 - **Tune difficulty scaling per topic.** `_difficulty_range` is linear in
@@ -280,6 +264,56 @@ not just missing coverage.
 ## Done
 
 Completed items, newest first.
+
+### 2026-08-03 — repeated questions, and multiple choice that gave itself away
+
+Four faults reported from play, all §2.1.
+
+- **Grade-5 comparison repeated itself.** Not the down-levelling cause
+  below — a different one. The top tier could only build `3^4 _ 4!`:
+  two bare powers, or a power against a factorial, drawn from 29 power
+  pairs and five factorials. The maths was right and the shapes were
+  few, so the same question came round within a quiz and across quizzes.
+  There are now eight more expression shapes — a power inside ordinary
+  arithmetic (`2^4 + 3 × 2 + 8`, the shape asked for), a scaled power
+  (`3 × 2^5`), a trimmed one (`5^3 - 40`), two powers added, a factorial
+  with arithmetic around it — plus `9 × 7 - 12`, `48 ÷ 6 + 15` and
+  `4 × 6 + 3 × 5` at grade 4, where every comparison used to be
+  `x × y + z`. Measured over 300 quizzes per level: quizzes containing a
+  repeat went from 2/200 to 0/300, and grade-5-hard now draws 2,930
+  distinct questions per 4,000 (it was far tighter). Comparison
+  signatures are also sorted now, so "A _ B" and "B _ A" count as the
+  same question — they read as a repeat even though the answer flips.
+- **The level ladder walked topics off their own map.** `next_level`
+  stepped the grade down without knowing the topic, so a struggling
+  grade-4 percentages player was sent to grade 3, and multiplication
+  could reach grade 1 — where the number range is too small for ten
+  distinct questions (measured: 3 of 10 at K easy). It now takes the
+  topic and stops at that topic's entry grade, holding the level while
+  still reporting "down". Difficulty still steps down first, and
+  stepping *up* is unaffected.
+- **Multiple choice offered answers from the wrong universe.** "8! _ 2^6"
+  came with `128 · < · 127 · >`, and "Is 41 even or odd?" with
+  `< · 21 · 18 · odd` — in both cases only one option was even the right
+  kind of thing, so a kid could score without doing any maths. Options
+  are now domain-matched: a comparison offers exactly `<`, `>`, `=`;
+  even/odd offers both words; a unit question offers units; a shape
+  question offers shapes. Where the question already lists its
+  alternatives ("• grams • millimeters • meters", "the biggest: 21, 2 or
+  17"), those *are* the options and nothing is invented alongside them.
+- **The wrong numbers were the wrong wrong numbers.** "8 minutes is how
+  many seconds?" offered `480 · 470 · 479 · 477`. Nothing computes 479,
+  so it tested nothing. Numeric distractors are now built from
+  misconceptions — a dropped or extra zero, a doubling or halving, a
+  round-number guess, transposed digits — with at most one near miss.
+  The same question now offers `4800 · 490 · 482`. Single-digit answers
+  still use neighbours, because 3 vs 30 isn't a misconception.
+- The wrong answers moved to `app/distractors.py` (a module §5 already
+  wanted), and `test_distractors.py` pins all of it: no option list may
+  contain exactly one option of a different kind from the rest, every
+  question in a multiple-choice quiz still gets options, and the
+  question's own listed alternatives win. `test_comparison.py` gained
+  variety tests, and `test_leveling.py` the topic floor.
 
 ### 2026-07-31 — per-question timers moved into a table, and lengthened
 

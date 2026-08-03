@@ -22,6 +22,7 @@ from math import factorial, gcd
 from typing import Callable, NamedTuple
 
 from . import measurement, money_time, percentages, word_problems
+from .distractors import build_options
 from .question_times import question_seconds
 from .rotation import rotating
 from .models import AnswerKind, AnswerMode, Difficulty, Grade, MathType, QuestionInternal
@@ -676,6 +677,12 @@ def _expr_mul_add(rng: random.Random, target: int | None = None) -> _Expr | None
     return None
 
 
+def _expr_mul_add_only(rng: random.Random) -> _Expr:
+    """`_expr_mul_add` without the "may return None" contract, for
+    callers that just want one of these and can't retry."""
+    return _expr_mul_add(rng) or _expr_sum(rng, 12, 99)
+
+
 def _expr_brackets(rng: random.Random) -> _Expr:
     a, b = rng.randint(3, 20), rng.randint(2, 15)
     m = rng.randint(2, 9)
@@ -702,6 +709,89 @@ def _expr_factorial(rng: random.Random) -> _Expr:
     return _Expr(f"{n}!", factorial(n))
 
 
+# Powers small enough to sit inside a longer expression without the
+# arithmetic around them becoming irrelevant.
+_SMALL_POWERS = [(b, e) for (b, e) in _POWERS if b ** e <= 1_000]
+
+
+def _expr_power_plus(rng: random.Random) -> _Expr:
+    """`2^4 + 3 × 2 + 8` — a power buried in ordinary arithmetic.
+
+    Every term is added, so the pieces can be shuffled: the power turns
+    up first, last or in the middle, and the question stops looking like
+    the same template every time.
+    """
+    base, exp = rng.choice(_SMALL_POWERS)
+    parts, value = [f"{base}^{exp}"], base ** exp
+    if rng.random() < 0.7:
+        x, y = rng.randint(2, 9), rng.randint(2, 9)
+        parts.append(f"{x} × {y}")
+        value += x * y
+    if rng.random() < 0.6 or len(parts) == 1:
+        c = rng.randint(2, 40)
+        parts.append(str(c))
+        value += c
+    rng.shuffle(parts)
+    return _Expr(" + ".join(parts), value)
+
+
+def _expr_power_scaled(rng: random.Random) -> _Expr:
+    """`3 × 2^4` — a multiplier in front of a power."""
+    base, exp = rng.choice(_SMALL_POWERS)
+    m = rng.randint(2, 9)
+    return _Expr(f"{m} × {base}^{exp}", m * base ** exp)
+
+
+def _expr_power_minus(rng: random.Random) -> _Expr:
+    """`5^3 - 40` — a power you have to work out and then trim."""
+    base, exp = rng.choice(_SMALL_POWERS)
+    value = base ** exp
+    c = rng.randint(2, max(3, value // 2))
+    return _Expr(f"{base}^{exp} - {c}", value - c)
+
+
+def _expr_two_powers(rng: random.Random) -> _Expr:
+    """`2^5 + 3^3` — two powers, neither of them the whole answer."""
+    (b1, e1), (b2, e2) = rng.sample(_SMALL_POWERS, 2)
+    return _Expr(f"{b1}^{e1} + {b2}^{e2}", b1 ** e1 + b2 ** e2)
+
+
+def _expr_factorial_mix(rng: random.Random) -> _Expr:
+    """`6! - 200`, `4! × 3` — a factorial that isn't the final answer."""
+    n = rng.randint(4, 7)
+    value = factorial(n)
+    roll = rng.random()
+    if roll < 0.4:
+        c = rng.randint(2, max(3, value // 2))
+        return _Expr(f"{n}! - {c}", value - c)
+    if roll < 0.7:
+        c = rng.randint(2, 60)
+        return _Expr(f"{n}! + {c}", value + c)
+    m = rng.randint(2, 5)
+    return _Expr(f"{m} × {n}!", m * value)
+
+
+def _expr_mul_sub(rng: random.Random) -> _Expr:
+    """`9 × 7 - 12` — precedence again, the other way round."""
+    x, y = rng.randint(3, 12), rng.randint(3, 12)
+    product = x * y
+    c = rng.randint(2, max(3, product - 1))
+    return _Expr(f"{x} × {y} - {c}", product - c)
+
+
+def _expr_div_add(rng: random.Random) -> _Expr:
+    """`48 ÷ 6 + 15` — division first, then the addition."""
+    divisor, quotient = rng.randint(2, 9), rng.randint(2, 12)
+    c = rng.randint(2, 40)
+    return _Expr(f"{divisor * quotient} ÷ {divisor} + {c}", quotient + c)
+
+
+def _expr_two_products(rng: random.Random) -> _Expr:
+    """`4 × 6 + 3 × 5` — two multiplications before a single add."""
+    a, b, c, d = (rng.randint(2, 12) for _ in range(4))
+    return _Expr(f"{a} × {b} + {c} × {d}", a * b + c * d)
+
+
 _POWER_REMINDER = "Reminder: 4^3 means 4 × 4 × 4."
 _FACTORIAL_REMINDER = "Reminder: 5! means 5 × 4 × 3 × 2 × 1."
 
@@ -724,7 +814,10 @@ def _compare(rng: random.Random, left: _Expr, right: _Expr, tag: str, reminder: 
         f"{left.text} = {left.value} and {right.text} = {right.value}, "
         f"so {left.text} {answer} {right.text}. ⚖️"
     )
-    return (tag, left.text, right.text), text, answer, explanation
+    # Sorted, so the coin flip above can't smuggle the same pair back
+    # into a quiz with the sides swapped — that reads as a repeat even
+    # though the answer flipped.
+    return (tag, *sorted([left.text, right.text])), text, answer, explanation
 
 
 def _cmp_sums(rng: random.Random, lo: int, hi: int):
@@ -851,6 +944,39 @@ def _cmp_factorial(rng: random.Random, lo: int, hi: int):
     return _compare(rng, left, right, "cmpfact", reminder)
 
 
+def _cmp_arithmetic_mix(rng: random.Random, lo: int, hi: int):
+    """Grade 4: two expressions drawn from several shapes, not one.
+
+    Before this the grade-4 comparison was `x × y + z` on both sides
+    nearly every time; a quiz of ten looked like one question repeated.
+    """
+    builders = (_expr_mul_add_only, _expr_mul_sub, _expr_div_add,
+                _expr_two_products, _expr_brackets)
+    left = rng.choice(builders)(rng)
+    right = rng.choice(builders)(rng)
+    return _compare(rng, left, right, "cmpmix")
+
+
+def _cmp_power_mix(rng: random.Random, lo: int, hi: int):
+    """Grade 5: powers and factorials with arithmetic around them.
+
+    `3^4 _ 4!` on its own is one shape, and ten of them in a row is the
+    same question ten times over — the reported complaint. These sides
+    look like `2^4 + 3 × 2 + 8`, `3 × 2^5`, `6! - 200`, so the pattern
+    changes even when the skill doesn't.
+    """
+    builders = (_expr_power_plus, _expr_power_scaled, _expr_power_minus,
+                _expr_two_powers, _expr_factorial_mix)
+    left = rng.choice(builders)(rng)
+    right = rng.choice(builders)(rng)
+    reminder = (
+        "Reminder: 4^3 means 4 × 4 × 4, and 5! means 5 × 4 × 3 × 2 × 1."
+        if "!" in left.text + right.text
+        else _POWER_REMINDER
+    )
+    return _compare(rng, left, right, "cmppowmix", reminder)
+
+
 _COMPARISON_TIERS = {
     # Numbers on their own while that's the skill...
     "basic": (_cmp_symbol, _even_odd, _sequence_next),
@@ -858,12 +984,12 @@ _COMPARISON_TIERS = {
     # ...then both sides of the comparison become something to work out.
     "sums": (_cmp_sums, _cmp_sum_biggest, _sequence_next, _place_value, _round_to_ten),
     "operators": (
-        _cmp_mixed_ops, _cmp_big_sums, _cmp_expr_biggest,
+        _cmp_mixed_ops, _cmp_arithmetic_mix, _cmp_big_sums, _cmp_expr_biggest,
         _sequence_doubling, _round_to_hundred,
     ),
     "powers": (
-        _cmp_powers, _cmp_factorial, _cmp_brackets,
-        _cmp_mixed_ops, _cmp_expr_biggest, _sequence_doubling,
+        _cmp_powers, _cmp_power_mix, _cmp_factorial, _cmp_brackets,
+        _cmp_arithmetic_mix, _cmp_expr_biggest, _sequence_doubling,
     ),
 }
 
@@ -1551,97 +1677,17 @@ def _generate_mixed(difficulty: Difficulty, grade: Grade, rng: random.Random):
 
 
 # ---------- multiple-choice distractors ----------
-
-_FRACTION_RE = re.compile(r"^-?\d+/\d+$")
-_DECIMAL_RE = re.compile(r"^-?\d+\.\d+$")
-
-
-def _int_distractors(n: int, rng: random.Random) -> list[int]:
-    """Plausible off-by-a-little wrong integers (never negative if n >= 0)."""
-    deltas = [1, -1, 2, -2, 3, -3, 5, -5, 10, -10]
-    rng.shuffle(deltas)
-    out: list[int] = []
-    for d in deltas:
-        v = n + d
-        if v == n or (n >= 0 and v < 0) or v in out:
-            continue
-        out.append(v)
-    return out
-
-
-def _decimal_distractors(s: str, rng: random.Random) -> list[str]:
-    places = len(s.split(".")[1])
-    step = 10 ** (-places)
-    val = float(s)
-    out: list[str] = []
-    for mult in (1, -1, 2, -2, 5, -5):
-        v = round(val + mult * step, places)
-        if v <= 0 or abs(v - val) < step / 2:
-            continue
-        formatted = f"{v:.{places}f}"
-        if formatted != s and formatted not in out:
-            out.append(formatted)
-    return out
-
-
-def _fraction_distractors(s: str, rng: random.Random) -> list[str]:
-    num, den = (int(x) for x in s.split("/"))
-    correct_val = num / den
-    out: list[str] = []
-    for dn, dd in [(1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (-1, -1)]:
-        n2, d2 = num + dn, den + dd
-        if n2 < 1 or d2 < 2:
-            continue
-        cand = f"{n2}/{d2}"
-        if cand != s and abs(n2 / d2 - correct_val) > 1e-9 and cand not in out:
-            out.append(cand)
-    return out
-
-
-def _build_options(correct, sibling_answers, rng: random.Random) -> list[str] | None:
-    """Return shuffled options (correct + 1-3 distractors), or None if we
-    couldn't produce even one plausible distractor.
-
-    Distractors come first from type-appropriate near-misses, then from
-    the other correct answers in the same quiz (same topic/difficulty →
-    naturally plausible), which also covers categorical answers like
-    "even"/"odd", "<"/">"/"=", or shape names without hardcoded pools.
-    """
-    correct_str = str(correct)
-    distractors: list[str] = []
-
-    def add(value: str):
-        if value != correct_str and value not in distractors and len(distractors) < 3:
-            distractors.append(value)
-
-    if isinstance(correct, int):
-        for v in _int_distractors(correct, rng):
-            add(str(v))
-    elif _DECIMAL_RE.match(correct_str):
-        for v in _decimal_distractors(correct_str, rng):
-            add(v)
-    elif _FRACTION_RE.match(correct_str):
-        for v in _fraction_distractors(correct_str, rng):
-            add(v)
-
-    # Supplement with sibling answers (shuffled) to reach 3 where possible.
-    siblings = [str(s) for s in sibling_answers]
-    rng.shuffle(siblings)
-    for s in siblings:
-        add(s)
-
-    if not distractors:
-        return None
-    options = distractors + [correct_str]
-    rng.shuffle(options)
-    return options
+#
+# The wrong answers live in distractors.py: which ones are worth offering
+# turned out to be a topic of its own (domains that must not mix, and
+# mistakes a kid would actually make), and it was drowning this file.
 
 
 def _attach_options(questions: list[QuestionInternal], rng: random.Random) -> None:
     all_answers = [q.correctAnswer for q in questions]
     for i, q in enumerate(questions):
         siblings = all_answers[:i] + all_answers[i + 1:]
-        q.options = _build_options(q.correctAnswer, siblings, rng)
+        q.options = build_options(q.correctAnswer, q.question, siblings, rng)
 
 
 def generate_questions(

@@ -36,9 +36,11 @@ def _evaluate(expr: str) -> int:
     Deliberately a separate implementation: if both sides shared code, a
     bug in precedence or in the factorial would cancel itself out.
     """
-    text = expr.replace("×", "*").replace("^", "**")
+    text = expr.replace("×", "*").replace("^", "**").replace("÷", "//")
     text = re.sub(r"(\d+)!", lambda m: str(factorial(int(m.group(1)))), text)
-    assert re.fullmatch(r"[\d\s()+*]+", text), text
+    # Only the operators the generator is allowed to print, so a new one
+    # can't slip through unevaluated.
+    assert re.fullmatch(r"[\d\s()+*/-]+", text), text
     return eval(text, {"__builtins__": {}}, {})  # noqa: S307 - test-only, generated input
 
 
@@ -252,3 +254,72 @@ def test_the_reminder_line_does_not_buy_extra_time():
     # The reminder adds a few words of reading, not two more calculations.
     assert with_reminder - without < SECONDS_PER_HEAVY_OP
 
+
+
+# ---------- variety: one skill, many shapes (PROJECT_PLAN §2.1) ----------
+#
+# Reported from play: a grade-5 comparison quiz was "3^4 vs 4!" over and
+# over. The maths was right, but with only 29 power pairs and five
+# factorials to draw on, the same handful of questions came round again
+# — within a quiz and across quizzes.
+
+
+def _pairs(q):
+    """The two sides of a comparison, order-insensitive."""
+    m = re.search(r"blank:\n\n(.+?) _ (.+)$", q.question)
+    return tuple(sorted(m.groups())) if m else None
+
+
+@pytest.mark.parametrize("grade", [Grade.G4, Grade.G5], ids=lambda g: g.value)
+@pytest.mark.parametrize("difficulty", [Difficulty.medium, Difficulty.hard], ids=lambda d: d.value)
+def test_a_quiz_never_repeats_a_comparison(grade, difficulty):
+    """Including with the sides swapped — "3^4 _ 4!" and "4! _ 3^4" read
+    as the same question even though the answer flips."""
+    for seed in range(120):
+        qs = _questions(grade, difficulty, seed)
+        pairs = [p for p in (_pairs(q) for q in qs) if p]
+        assert len(set(pairs)) == len(pairs), (seed, pairs)
+        assert len({q.question for q in qs}) == 10
+
+
+def test_grade_five_comparisons_are_not_all_bare_powers():
+    """The complaint in one assertion: powers and factorials must turn
+    up inside arithmetic too, not only on their own."""
+    mixed = plain = 0
+    for seed in SEEDS:
+        for q in _questions(Grade.G5, Difficulty.hard, seed):
+            pair = _pairs(q)
+            if not pair:
+                continue
+            for side in pair:
+                if "^" in side or "!" in side:
+                    if any(op in side for op in ("+", "-", "×")):
+                        mixed += 1
+                    else:
+                        plain += 1
+    assert mixed > 0, "no power/factorial ever appeared inside a larger expression"
+    assert mixed >= plain / 3, f"only {mixed} mixed against {plain} bare"
+
+
+def test_the_pool_of_grade_five_questions_is_wide():
+    """Thirty quizzes should not keep meeting the same questions."""
+    seen = set()
+    for seed in range(30):
+        for q in _questions(Grade.G5, Difficulty.hard, seed):
+            seen.add(q.question)
+    # 300 draws; anything near 300 means collisions are rare.
+    assert len(seen) > 240, len(seen)
+
+
+def test_grade_four_comparisons_have_more_than_one_shape():
+    shapes = set()
+    for seed in SEEDS:
+        for q in _questions(Grade.G4, Difficulty.medium, seed):
+            pair = _pairs(q)
+            if not pair:
+                continue
+            for side in pair:
+                shapes.add(
+                    ("÷" in side, "-" in side, "×" in side, "(" in side, "+" in side)
+                )
+    assert len(shapes) >= 5, shapes

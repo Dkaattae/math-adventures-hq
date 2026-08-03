@@ -88,8 +88,8 @@ def test_mixed_multiple_choice_options_valid():
 
 
 def test_int_distractors_stay_non_negative_for_small_answers():
-    from app.questions import _build_options
+    from app.distractors import build_options
 
     rng = random.Random(1)
-    opts = _build_options(1, sibling_answers=[2, 3, 4], rng=rng)
+    opts = build_options(1, "1 + 0 = ?", sibling_answers=[2, 3, 4], rng=rng)
     assert all(int(o) >= 0 for o in opts)
