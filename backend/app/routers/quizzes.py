@@ -38,9 +38,17 @@ def _badge_for(score: int) -> str | None:
     return None
 
 
-def _public_questions(internal_qs) -> list[Question]:
+def _public_questions(
+    internal_qs,
+    math_type: MathType | None = None,
+    difficulty: Difficulty | None = None,
+    grade: Grade | None = None,
+) -> list[Question]:
     # answerKind is derived from the correct answer at read time rather
     # than stored, so it can never drift from the key it describes.
+    # timeLimitSeconds likewise: budgets come from the table in
+    # question_times.py at read time, so retuning it takes effect for
+    # quizzes that were created before the change but not yet played.
     return [
         Question(
             id=q.id,
@@ -48,7 +56,11 @@ def _public_questions(internal_qs) -> list[Question]:
             options=q.options,
             figure=q.figure,
             answerKind=answer_kind(q.correctAnswer),
-            timeLimitSeconds=time_limit_seconds(q.question),
+            # A 🎲 Mixed quiz's questions each came from their own topic,
+            # so prefer the one the question remembers over the quiz's.
+            timeLimitSeconds=time_limit_seconds(
+                q.question, q.topic or math_type, difficulty, grade
+            ),
         )
         for q in internal_qs
     ]
@@ -77,7 +89,9 @@ def create_quiz(payload: QuizCreate, db: Session = Depends(get_session)) -> Quiz
         grade=payload.grade,
         mathType=payload.mathType,
         difficulty=payload.difficulty,
-        questions=_public_questions(internal_qs),
+        questions=_public_questions(
+            internal_qs, payload.mathType, payload.difficulty, payload.grade
+        ),
         createdAt=row.created_at,
     )
 
@@ -96,7 +110,12 @@ def get_quiz(quiz_id: UUID, db: Session = Depends(get_session)) -> Quiz:
         grade=Grade(row.grade),
         mathType=MathType(row.math_type),
         difficulty=Difficulty(row.difficulty),
-        questions=_public_questions(storage.quiz_questions(row)),
+        questions=_public_questions(
+            storage.quiz_questions(row),
+            MathType(row.math_type),
+            Difficulty(row.difficulty),
+            Grade(row.grade),
+        ),
         createdAt=row.created_at,
     )
 

@@ -45,6 +45,85 @@ Completed work moves to the **Done** section at the bottom.
   answer immediately and gives up review-before-submit — while
   score/speed modes keep the current flow and show only the opponent's
   position. Don't split the screen; mirror the existing dot strip.
+
+- **Ghost race** (chosen 2026-07-31 as the compete-mode rung to build).
+  Race a *recorded* run instead of a live person: their dots fill on the
+  timeline they actually achieved while you play. No lobby, no
+  invitations, no start barrier, no disconnect handling, no polling —
+  the whole opponent is data fetched once when the quiz starts.
+
+  **Replay the ghost's quiz, don't generate a parallel one.** Quiz rows
+  already store `questions_json`, so a challenger can be served the same
+  ten questions the ghost answered — which makes the race genuinely
+  like-for-like and the scores directly comparable. Generating a fresh
+  quiz "at the same level" instead would mean racing someone who
+  answered different questions, which is a pace car, not a race.
+  `_public_questions` already strips the answer key, so replaying is
+  safe by construction.
+
+  **Where ghosts come from.** Not the leaderboard: `LeaderboardRow` has
+  no `quiz_id` (see §5 — the table is doing double duty), so a board row
+  can't reach the questions that were asked. The path is
+  `quiz_results` → `quizzes`, which does carry both the run and its
+  question set.
+
+  **When the grade+topic has no history — the fallback ladder.** This is
+  the common case early on, and on niche combinations (percentages,
+  grade 4, hard) it may never fill. Walk down until something is found,
+  and always say which rung was used rather than silently substituting:
+
+  1. **Another player's run at the same grade + topic + difficulty.**
+     Prefer recent runs so the pool doesn't fossilize around one kid
+     from months ago.
+  2. **Your own best run at that level** — "beat your own record". Always
+     available after one attempt, and the most motivating of the
+     fallbacks rather than the saddest.
+  3. **The nearest neighbouring level** — same topic, adjacent difficulty
+     first, then ±1 grade. Label it honestly on screen ("Sam's Grade 4
+     run"), because a grade-4 ghost on a grade-3 quiz is a different
+     question set and the comparison is only indicative.
+  4. **The robot pacer** (rung 1 of compete mode), tuned to the level and
+     clearly badged as a robot. Never dress it up as a person.
+
+  Rung 4 means the feature never shows an empty screen, which is what
+  makes it safe to put a "Race someone" button on the setup screen
+  unconditionally.
+
+  **Concerns, in the order they'd bite:**
+
+  - **Per-question timings don't exist yet.** Only `time_used_seconds`
+    (the whole quiz) is stored. Without splits a ghost can only move at
+    a constant total/10 pace, which looks robotic and is actively unfair
+    on a word problem the real kid spent 40 seconds reading. Needs a new
+    column (per-question seconds on `quiz_results`) and the client to
+    report them — and, like `timeUsedSeconds` today, they're
+    client-reported, so they need the same clamping: the splits must sum
+    to no more than the server-observed window, or a doctored payload
+    creates an unbeatable ghost.
+  - **Privacy.** Per-user history was deliberately made private in
+    2026-07-20 (session token + `require_self`); only the leaderboard is
+    public. A ghost exposes another child's *pace*, which is more than
+    the board reveals today. Decide it explicitly: restrict ghosts to
+    runs already visible on the public leaderboard, show the same name
+    the board shows, and consider an opt-out — don't drift into
+    publishing timing data by accident.
+  - **Ghost choice is a motivation lever, not a query detail.** Always
+    racing the fastest run on the board means always losing. Pick a
+    ghost a little better than the challenger's own recent average — a
+    stretch, not a wall. This decides whether the feature is fun or
+    quietly discouraging.
+  - **Winning has to mean score first, then time**, matching the
+    leaderboard ordering. If it's pure speed, blasting through with
+    wrong answers wins, which teaches exactly the wrong lesson.
+  - **Replay makes questions repeatable.** A kid can race the same ghost
+    repeatedly, memorise the ten answers, and post a very fast time.
+    Either mark race attempts so they don't write leaderboard rows, or
+    accept it and let the board be for fresh quizzes only.
+  - **The ghost must never touch the live player's clock.** Per-question
+    budgets already auto-advance; the ghost is a display overlay, and if
+    it lags or finishes early nothing about the real quiz changes.
+  - **Quitting already does the right thing** — abandoned attempts are
+    never submitted, so they can't become ghosts. Nothing to add.
 - ~~More visual questions~~ — done 2026-07-30: angles, symmetry and
   labelled perimeter/area rectangles, on the same grade ladder as the
   text questions. Still open beyond that: composite figures, angle
@@ -166,7 +245,13 @@ not just missing coverage.
 - **`leaderboard` table is doing double duty** as both the ranking board
   and each user's quiz history (via `query_user_stats`). Consider a
   dedicated history/attempts table, or rename to reflect that it's an
-  attempts log the leaderboard reads from.
+  attempts log the leaderboard reads from. The ghost race in §1 gives
+  this a concrete cost: `LeaderboardRow` carries no `quiz_id`, so a
+  board row can't reach the questions that were asked, and the "recent
+  quizzes" list on the progress screen (which reads the same table)
+  can't either. Ghosts have to come from `quiz_results` instead, which
+  means the board and the attempts log answer different questions about
+  the same run — exactly the confusion this item is about.
 - **Split `questions.py`** into a package:
   `questions/arithmetic.py`, `fractions.py`, `order_of_ops.py`,
   `comparison.py`, `geometry_data.py`, `distractors.py`, etc., behind
@@ -195,6 +280,42 @@ not just missing coverage.
 ## Done
 
 Completed items, newest first.
+
+### 2026-07-31 — per-question timers moved into a table, and lengthened
+
+- **The clock is now data, not a formula.** Budgets used to be computed
+  inside `questions.py` — a 15-second base plus a word count — with no
+  way to say "word problems need longer" without editing logic, and no
+  way to see all the numbers at once. `app/question_times.py` holds the
+  whole map keyed by **topic × grade × difficulty**, plus the four global
+  knobs (floor, cap, free-word allowance, seconds per power/factorial).
+  A budget is `topic base for the grade + difficulty adjustment +
+  reading bonus + thinking bonus`, clamped. `time_limit_seconds()` is now
+  a thin wrapper over it, and the table is read at request time, so a
+  retune reaches quizzes that were already created but not yet played.
+- **Word problems 15s → 30s, comparison 15s → 30s from grade 3.** Both
+  were reported as too fast in play. Word problems now start at 30 at
+  every level (hard +5), and longer scenes still earn a second per extra
+  word on top, so a 60-word grade-5 list lands near 65s. Comparison keeps
+  15s at K–2, where it's "which of these numbers is biggest", and gets 30
+  from grade 3, where it becomes "work out both sides, then compare";
+  powers and factorials add their usual 10s each. Geometry at grades 4–5
+  went to 20s, since reading a labelled figure comes before the
+  arithmetic. Everything else is unchanged at 15.
+- **Mixed quizzes needed a fix to make this work.** Their ten questions
+  each come from a different topic, so a word problem in a mixed quiz
+  would have been served the `mixed` budget. `QuestionInternal` now
+  carries the topic that produced it, stored alongside the question, and
+  the API prefers it over the quiz's own. Quizzes stored before this
+  fall back to the quiz topic rather than breaking.
+- `test_question_times.py` pins the table's shape (every `MathType` must
+  appear, so a new topic can't inherit a default nobody chose), the two
+  numbers that prompted the change, that the eight one-line arithmetic
+  topics still get exactly 15, and — because a table the endpoint doesn't
+  read is just a document — the budgets as actually served by
+  `POST /api/quizzes`, including a word problem inside a mixed quiz. A
+  guard rail test keeps any future edit from pushing a whole quiz past
+  12 minutes.
 
 ### 2026-07-31 — the backend testing gaps closed, and the fix one of them needed
 

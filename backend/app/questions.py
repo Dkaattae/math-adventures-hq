@@ -22,6 +22,7 @@ from math import factorial, gcd
 from typing import Callable, NamedTuple
 
 from . import measurement, money_time, percentages, word_problems
+from .question_times import question_seconds
 from .rotation import rotating
 from .models import AnswerKind, AnswerMode, Difficulty, Grade, MathType, QuestionInternal
 
@@ -1461,7 +1462,12 @@ def _generate_geometry(difficulty: Difficulty, grade: Grade, rng: random.Random)
         figure = item[3] if len(item) > 3 else None
         questions.append(
             QuestionInternal(
-                id=i, question=text, correctAnswer=ans, explanation=expl, figure=figure
+                id=i,
+                question=text,
+                correctAnswer=ans,
+                explanation=expl,
+                figure=figure,
+                topic=MathType.geometry,
             )
         )
     return questions
@@ -1480,7 +1486,13 @@ def _generate_typed(math_type: MathType, difficulty: Difficulty, grade: Grade, r
             attempts += 1
         seen.add(signature)
         questions.append(
-            QuestionInternal(id=i, question=text, correctAnswer=answer, explanation=explanation)
+            QuestionInternal(
+                id=i,
+                question=text,
+                correctAnswer=answer,
+                explanation=explanation,
+                topic=math_type,
+            )
         )
     return questions
 
@@ -1527,7 +1539,12 @@ def _generate_mixed(difficulty: Difficulty, grade: Grade, rng: random.Random):
         seen_text.add(text)
         questions.append(
             QuestionInternal(
-                id=i, question=text, correctAnswer=answer, explanation=explanation, figure=figure
+                id=i,
+                question=text,
+                correctAnswer=answer,
+                explanation=explanation,
+                figure=figure,
+                topic=math_type,
             )
         )
     return questions
@@ -1680,35 +1697,23 @@ def _parse_number(s: str) -> float | None:
         return None
 
 
-_BASE_QUESTION_SECONDS = 15
-_FREE_WORDS = 25
-_MAX_QUESTION_SECONDS = 120
-_HEAVY_OP_SECONDS = 10
-# Powers and factorials only — the operators a kid has to grind out.
-_HEAVY_OPS = re.compile(r"\d\^\d|\d!")
-
-
-def time_limit_seconds(text: str) -> int:
+def time_limit_seconds(
+    text: str,
+    math_type: MathType | None = None,
+    difficulty: Difficulty | None = None,
+    grade: Grade | None = None,
+) -> int:
     """How long a question is worth, in seconds.
 
-    A one-line sum and a five-line shopping list can't share a clock:
-    15 seconds is generous for "7 + 5 = ?" and impossible for a scene a
-    kid has to read twice. Everything up to 25 words keeps the original
-    15 seconds (so every topic but word problems is unchanged); past
-    that, roughly a second per extra word covers the reading.
+    A one-line sum and a five-line shopping list can't share a clock, and
+    neither can "3 + 4 = ?" and "is 8! bigger than 4^4?". The numbers all
+    live in `question_times.py` — that's the file to edit — and this is
+    the thin wrapper the rest of the app calls.
+
+    The level arguments are optional so a caller that only has the text
+    still gets a sensible budget from the default base.
     """
-    words = len(text.split())
-    seconds = _BASE_QUESTION_SECONDS + max(0, words - _FREE_WORDS)
-    # Reading isn't the only cost. A power or a factorial is short to read
-    # and slow to work out — "9^4 _ 7!" is eight characters and two real
-    # calculations — so each one buys its own thinking time. The reminder
-    # line explaining the notation doesn't count: nothing there is worked
-    # out, and counting it would pay twice for the same question.
-    body = "\n".join(
-        line for line in text.splitlines() if not line.startswith("Reminder:")
-    )
-    seconds += _HEAVY_OP_SECONDS * len(_HEAVY_OPS.findall(body))
-    return min(_MAX_QUESTION_SECONDS, seconds)
+    return question_seconds(text, math_type, difficulty, grade)
 
 
 def answer_kind(correct: int | str) -> AnswerKind:

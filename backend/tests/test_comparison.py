@@ -15,9 +15,9 @@ from math import factorial
 import pytest
 
 from app.models import Difficulty, Grade, MathType
+from app.question_times import SECONDS_PER_HEAVY_OP
 from app.questions import (
     _COMPARISON_TIERS,
-    _HEAVY_OP_SECONDS,
     _comparison_tier,
     _pick_factory,
     generate_questions,
@@ -224,13 +224,19 @@ def test_powers_and_factorials_buy_thinking_time():
 
 
 def test_grade_five_power_questions_are_not_on_a_fifteen_second_clock():
+    """Asked the way the API asks it — topic, difficulty and grade — so
+    this reflects the clock a player actually gets."""
     from app.questions import time_limit_seconds
 
     checked = 0
     for seed in SEEDS:
         for q in _questions(Grade.G5, Difficulty.hard, seed):
             if re.search(r"\d\^\d|\d!", q.question):
-                assert time_limit_seconds(q.question) >= 35, q.question
+                budget = time_limit_seconds(
+                    q.question, MathType.comparison, Difficulty.hard, Grade.G5
+                )
+                # 30 (grade 3+) + 5 (hard) + 10 per power/factorial.
+                assert budget >= 45, (budget, q.question)
                 checked += 1
     assert checked > 0
 
@@ -244,5 +250,5 @@ def test_the_reminder_line_does_not_buy_extra_time():
     )
     without = time_limit_seconds("Write <, > or = in the blank:\n\n5^2 _ 3^6")
     # The reminder adds a few words of reading, not two more calculations.
-    assert with_reminder - without < _HEAVY_OP_SECONDS
+    assert with_reminder - without < SECONDS_PER_HEAVY_OP
 
