@@ -507,7 +507,9 @@ def suggest_level(
     ]
     avg = sum(r.score for r in same_level) / len(same_level)
 
-    grade, difficulty, _ = next_level(Grade(latest.grade), Difficulty(latest.difficulty), avg)
+    grade, difficulty, _ = next_level(
+        Grade(latest.grade), Difficulty(latest.difficulty), avg, math_type
+    )
     if math_type is not None:
         grade, difficulty = _clamp_to_topic(math_type, grade, difficulty)
     return SuggestedLevel(

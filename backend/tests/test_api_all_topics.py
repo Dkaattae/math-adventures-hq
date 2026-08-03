@@ -19,6 +19,7 @@ from uuid import UUID
 import pytest
 
 from app import storage
+from app.distractors import kind_of
 from app.models import AnswerMode, Difficulty, Grade, MathType
 from app.questions import min_grade_for_type
 
@@ -77,16 +78,26 @@ def test_every_topic_creates_a_clean_quiz(client, math_type):
 
 @pytest.mark.parametrize("math_type", TOPICS, ids=lambda t: t.value)
 def test_every_topic_can_be_answered_by_tapping(client, math_type):
-    """Multiple choice has to offer four distinct options that include
-    the right answer — and still not say which one it is."""
+    """Multiple choice must offer distinct, plausible options that
+    include the right answer without giving it away.
+
+    Not always four: "write <, > or =" has exactly three possible
+    answers and "even or odd" two, and padding those out with numbers is
+    what made the answer obvious (PROJECT_PLAN §2.1).
+    """
     for grade in _grades_for(math_type):
         body = _create(client, math_type, grade, answer_mode="multiple_choice")
         for q in body["questions"]:
             options = q["options"]
             assert options is not None, q["question"]
-            assert len(options) == 4, options
-            assert len(set(options)) == 4, options
+            assert 2 <= len(options) <= 4, options
+            assert len(set(options)) == len(options), options
             assert all(str(o).strip() for o in options), options
+            # Every option is the same sort of thing as every other, so
+            # the odd one out can't be spotted without doing the maths.
+            kinds = {kind_of(str(o)) for o in options}
+            numeric = {"integer", "decimal", "fraction"}
+            assert len(kinds) == 1 or kinds <= numeric, (q["question"], options)
 
 
 # ---------- the full round trip ----------

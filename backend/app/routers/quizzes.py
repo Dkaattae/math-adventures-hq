@@ -164,8 +164,11 @@ def submit_quiz(
     # penalize honest sub-second clock skew).
     server_elapsed = max(0, int((submitted_at - row.created_at).total_seconds()) + 1)
     time_used = min(payload.timeUsedSeconds, server_elapsed)
+    # The topic matters to the ladder: stepping a grade down is only an
+    # option while the topic is still offered down there (PROJECT_PLAN
+    # §2.1) — "try grade 3 percentages" was a level that doesn't exist.
     rec_grade, rec_difficulty, direction = next_level(
-        Grade(row.grade), Difficulty(row.difficulty), score
+        Grade(row.grade), Difficulty(row.difficulty), score, MathType(row.math_type)
     )
     result = QuizResult(
         quizId=quiz_id,
