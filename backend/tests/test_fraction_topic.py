@@ -142,3 +142,33 @@ def test_helpers():
     assert fq.decimal_str(1, 4) == "0.25" and fq.decimal_str(7, 4) == "1.75"
     assert fq.decimal_str(1, 8) == "0.125" and fq.decimal_str(1, 3) is None
     assert fq.fits_pie(13, 5) and not fq.fits_pie(1, 16) and not fq.fits_pie(20, 5)
+
+
+# ---------- fractions in mixed quizzes ----------
+
+
+@pytest.mark.parametrize("grade", [Grade.G2, Grade.G3, Grade.G4, Grade.G5])
+@pytest.mark.parametrize("difficulty", list(Difficulty))
+def test_mixed_quizzes_keep_three_seats_for_fractions(grade, difficulty):
+    for seed in range(15):
+        qs = generate_questions(MathType.mixed, difficulty, grade, rng=random.Random(seed))
+        fractions = [q for q in qs if q.topic == MathType.fractions]
+        assert len(fractions) >= 3, [q.question for q in qs]
+        # Drawn from one deck, so they aren't three of the same shape.
+        shapes = {re.sub(r"\d+", "#", q.question) for q in fractions}
+        assert len(shapes) >= 2, [q.question for q in fractions]
+
+
+def test_mixed_fraction_seats_move_around_the_quiz():
+    positions = set()
+    for seed in range(20):
+        qs = generate_questions(MathType.mixed, Difficulty.medium, Grade.G3, rng=random.Random(seed))
+        positions |= {q.id for q in qs if q.topic == MathType.fractions}
+    assert positions == set(range(10))
+
+
+@pytest.mark.parametrize("grade", [Grade.K, Grade.G1])
+def test_mixed_quizzes_before_grade_two_have_no_fractions(grade):
+    for seed in range(15):
+        for q in generate_questions(MathType.mixed, Difficulty.hard, grade, rng=random.Random(seed)):
+            assert q.topic != MathType.fractions, q.question

@@ -1,5 +1,7 @@
 # Math Adventures HQ
 
+**▶️ Play it live: <https://math-adventures-hq.onrender.com>**
+
 A kids' math quiz web app. Players pick a grade (K–5), a math topic, a
 difficulty, and how they want to answer, then take 10 auto-generated
 questions against the clock. Scores are persisted to a Postgres-backed
@@ -11,7 +13,8 @@ leaderboard.
   multiplication, division, algebra, geometry, fractions, order of
   operations, word problems, comparing numbers, money & time, decimals,
   percentages, and measurement conversions — plus a 🎲 Mixed option that
-  samples across all of them in one quiz.
+  samples across all of them in one quiz (from grade 2 up, 3 of its 10
+  questions are always fractions).
 - **Two answer modes**: type the answer, or pick from multiple choice.
   Distractors are generated per question (off-by-one near-misses plus
   same-topic decoys), so multiple choice works for every topic.

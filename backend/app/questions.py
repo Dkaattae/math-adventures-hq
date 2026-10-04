@@ -1543,8 +1543,16 @@ def _generate_typed(math_type: MathType, difficulty: Difficulty, grade: Grade, r
     return questions
 
 
+#: Seats in every mixed quiz kept for fractions, once the grade offers
+#: them. Drawn evenly, fractions were one topic of 10-14 — about one
+#: question a quiz, often none — for a skill that runs through every
+#: grade from 2 up. The other seats still draw evenly (fractions included).
+_MIXED_FRACTION_SEATS = 3
+
+
 def _generate_mixed(difficulty: Difficulty, grade: Grade, rng: random.Random):
-    """Sample each of the 10 questions from a randomly chosen topic.
+    """Sample each of the 10 questions from a randomly chosen topic, with
+    `_MIXED_FRACTION_SEATS` of them kept for fractions where unlocked.
 
     Signatures already carry a per-type prefix, so a single `seen` set
     dedupes across types; question text is tracked too as a safety net
@@ -1554,13 +1562,21 @@ def _generate_mixed(difficulty: Difficulty, grade: Grade, rng: random.Random):
     # Only mix in topics that are grade-appropriate (a Kindergartener's
     # "mixed" quiz shouldn't surprise them with long division).
     pool_types = [t for t in types_available(grade) if t != MathType.mixed]
+    fraction_seats: set[int] = set()
+    fraction_factory = None
+    if MathType.fractions in pool_types:
+        fraction_seats = set(rng.sample(range(10), _MIXED_FRACTION_SEATS))
+        # One rotating deck for the whole quiz, so the fraction questions
+        # are different shapes (a pie, a decimal, a mixed number…), not
+        # three draws that happen to land on the same one.
+        fraction_factory = _pick_factory(MathType.fractions, difficulty, grade)
     questions: list[QuestionInternal] = []
     seen_sig: set[tuple] = set()
     seen_text: set[str] = set()
     for i in range(10):
         figure = None
         for _ in range(_MAX_ATTEMPTS):
-            math_type = rng.choice(pool_types)
+            math_type = MathType.fractions if i in fraction_seats else rng.choice(pool_types)
             if math_type == MathType.geometry:
                 # The generated visual items are a handful against a
                 # static pool of ~80, so give them a fixed share here or
@@ -1574,7 +1590,11 @@ def _generate_mixed(difficulty: Difficulty, grade: Grade, rng: random.Random):
                 figure = item[3] if len(item) > 3 else None
                 signature = ("geo", text)
             else:
-                factory = _pick_factory(math_type, difficulty, grade)
+                factory = (
+                    fraction_factory
+                    if math_type == MathType.fractions
+                    else _pick_factory(math_type, difficulty, grade)
+                )
                 signature, text, answer, explanation, figure = _unpack(factory(rng, lo, hi))
             # Dedup by text so a mixed quiz never repeats wording (a
             # visual "how many sides…" appears at most once).
