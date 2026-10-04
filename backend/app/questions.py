@@ -21,7 +21,7 @@ import re
 from math import factorial, gcd
 from typing import Callable, NamedTuple
 
-from . import measurement, money_time, percentages, word_problems
+from . import fraction_questions, measurement, money_time, percentages, word_problems
 from .distractors import build_options
 from .question_times import question_seconds
 from .rotation import rotating
@@ -98,10 +98,17 @@ def _difficulty_range(difficulty: Difficulty, grade: Grade) -> tuple[int, int]:
 
 # ---------- per-type factories ----------
 #
-# Each factory returns (signature, question_text, correct_answer, explanation).
-# `id` is assigned later by the dedup loop.
+# Each factory returns (signature, question_text, correct_answer, explanation),
+# optionally followed by a figure string for the client to draw (fraction
+# pies use this; see `_unpack`). `id` is assigned later by the dedup loop.
 
-Factory = Callable[[random.Random, int, int], tuple[tuple, str, int | str, str]]
+Factory = Callable[[random.Random, int, int], tuple]
+
+
+def _unpack(result: tuple) -> tuple[tuple, str, int | str, str, str | None]:
+    """A factory's result with the optional figure filled in as None."""
+    signature, text, answer, explanation, *rest = result
+    return signature, text, answer, explanation, (rest[0] if rest else None)
 
 
 def _make_addition(rng: random.Random, lo: int, hi: int):
@@ -357,98 +364,10 @@ def _make_algebra_hard(rng: random.Random, lo: int, hi: int):
     return rng.choice(_ALGEBRA_TEMPLATES_HARD)(rng, lo, hi)
 
 
-# ---------- fractions: whole-number share, like/unlike denominators, product ----------
-
-
-def _simplify_fraction(num: int, den: int) -> str:
-    """Format num/den in lowest terms; whole-number results drop the denominator."""
-    if num == 0:
-        return "0"
-    g = gcd(num, den)
-    num, den = num // g, den // g
-    return str(num) if den == 1 else f"{num}/{den}"
-
-
-def _frac_of_whole(rng: random.Random, lo: int, hi: int):
-    den = rng.choice([2, 3, 4, 5, 10])
-    multiplier = rng.randint(1, max(2, hi // den))
-    whole = den * multiplier
-    num = rng.randint(1, den - 1)
-    answer = num * whole // den
-    return (
-        ("fracof", num, den, whole),
-        f"What is {num}/{den} of {whole}?",
-        answer,
-        f"{whole} ÷ {den} = {whole // den}, then × {num} = {answer}. 🍕",
-    )
-
-
-def _frac_same_denom(rng: random.Random, lo: int, hi: int):
-    den = rng.randint(2, max(3, hi // 2))
-    a = rng.randint(1, den - 1)
-    b = rng.randint(1, den - 1)
-    op = rng.choice(["+", "-"])
-    if op == "-" and b > a:
-        a, b = b, a
-    num = a + b if op == "+" else a - b
-    result = _simplify_fraction(num, den)
-    hint = f"{a}/{den} {op} {b}/{den} = {num}/{den}" + (f" = {result}" if result != f"{num}/{den}" else "") + "."
-    return (
-        ("fracsame", op, den, a, b),
-        f"{a}/{den} {op} {b}/{den} = ? (simplest form)",
-        result,
-        hint + " 🍕",
-    )
-
-
-def _frac_unlike_denom(rng: random.Random, lo: int, hi: int):
-    d1 = rng.randint(2, max(3, hi // 3))
-    d2 = rng.randint(2, max(3, hi // 3))
-    if d2 == d1:
-        d2 += 1
-    n1 = rng.randint(1, d1 - 1)
-    n2 = rng.randint(1, d2 - 1)
-    lcd = d1 * d2 // gcd(d1, d2)
-    num = n1 * (lcd // d1) + n2 * (lcd // d2)
-    result = _simplify_fraction(num, lcd)
-    return (
-        ("fracunlike", d1, n1, d2, n2),
-        f"{n1}/{d1} + {n2}/{d2} = ? (simplest form)",
-        result,
-        f"LCD of {d1} and {d2} is {lcd}: {n1}/{d1} = {n1 * (lcd // d1)}/{lcd}, "
-        f"{n2}/{d2} = {n2 * (lcd // d2)}/{lcd}. Sum = {num}/{lcd}"
-        + (f" = {result}" if result != f"{num}/{lcd}" else "")
-        + ". 🍕",
-    )
-
-
-def _frac_multiply(rng: random.Random, lo: int, hi: int):
-    n1 = rng.randint(1, max(2, hi // 3))
-    d1 = rng.randint(n1 + 1, max(n1 + 2, hi // 2 + 1))
-    n2 = rng.randint(1, max(2, hi // 3))
-    d2 = rng.randint(n2 + 1, max(n2 + 2, hi // 2 + 1))
-    num, den = n1 * n2, d1 * d2
-    result = _simplify_fraction(num, den)
-    return (
-        ("fracmul", n1, d1, n2, d2),
-        f"{n1}/{d1} × {n2}/{d2} = ? (simplest form)",
-        result,
-        f"Multiply straight across: ({n1}×{n2})/({d1}×{d2}) = {num}/{den}"
-        + (f" = {result}" if result != f"{num}/{den}" else "")
-        + ". 🍕",
-    )
-
-
-def _make_fractions_basic(rng: random.Random, lo: int, hi: int):
-    return _frac_of_whole(rng, lo, hi)
-
-
-def _make_fractions_intermediate(rng: random.Random, lo: int, hi: int):
-    return rng.choice([_frac_of_whole, _frac_same_denom])(rng, lo, hi)
-
-
-def _make_fractions_advanced(rng: random.Random, lo: int, hi: int):
-    return rng.choice([_frac_same_denom, _frac_unlike_denom, _frac_multiply])(rng, lo, hi)
+# ---------- fractions ----------
+#
+# Pictures, mixed numbers and the fraction ⇄ decimal bridge outgrew this
+# file — see fraction_questions.py.
 
 
 # ---------- order of operations: PEMDAS templates of increasing complexity ----------
@@ -1470,8 +1389,10 @@ def _pick_factory(math_type: MathType, difficulty: Difficulty, grade: Grade) -> 
     - Division: remainder questions appear from grade 3 onward at
       medium/hard; fractions and decimals only at grade 5 hard.
     - Algebra: two-step equations (ax + b = c) kick in at grade 4+ hard.
-    - Fractions: "fraction of a whole" only below grade 2/easy; unlike
-      denominators and multiplication unlock at grade 4+ hard.
+    - Fractions: pie pictures at grade 2-3 easy; remainders and mixed
+      numbers from grade 3 medium; fraction ⇄ decimal from grade 4
+      medium; multiplication at grade 4 hard and grade 5 medium+
+      (fraction_questions.tier_for).
     - Order of operations: two-term problems only below grade 3/medium;
       parentheses and three-term expressions unlock at grade 4+ hard.
     - Word problems: add/sub stories at first; multiplication joins at
@@ -1508,11 +1429,9 @@ def _pick_factory(math_type: MathType, difficulty: Difficulty, grade: Grade) -> 
         return _make_algebra
 
     if math_type == MathType.fractions:
-        if difficulty == Difficulty.hard and g >= 4:
-            return _make_fractions_advanced
-        if g >= 2 and difficulty != Difficulty.easy:
-            return _make_fractions_intermediate
-        return _make_fractions_basic
+        return fraction_questions.tier_factory(
+            fraction_questions.tier_for(difficulty.value, g)
+        )
 
     if math_type == MathType.order_of_operations:
         if difficulty == Difficulty.hard and g >= 4:
@@ -1605,10 +1524,10 @@ def _generate_typed(math_type: MathType, difficulty: Difficulty, grade: Grade, r
     questions: list[QuestionInternal] = []
     seen: set[tuple] = set()
     for i in range(10):
-        signature, text, answer, explanation = factory(rng, lo, hi)
+        signature, text, answer, explanation, figure = _unpack(factory(rng, lo, hi))
         attempts = 1
         while signature in seen and attempts < _MAX_ATTEMPTS:
-            signature, text, answer, explanation = factory(rng, lo, hi)
+            signature, text, answer, explanation, figure = _unpack(factory(rng, lo, hi))
             attempts += 1
         seen.add(signature)
         questions.append(
@@ -1617,6 +1536,7 @@ def _generate_typed(math_type: MathType, difficulty: Difficulty, grade: Grade, r
                 question=text,
                 correctAnswer=answer,
                 explanation=explanation,
+                figure=figure,
                 topic=math_type,
             )
         )
@@ -1655,8 +1575,7 @@ def _generate_mixed(difficulty: Difficulty, grade: Grade, rng: random.Random):
                 signature = ("geo", text)
             else:
                 factory = _pick_factory(math_type, difficulty, grade)
-                signature, text, answer, explanation = factory(rng, lo, hi)
-                figure = None
+                signature, text, answer, explanation, figure = _unpack(factory(rng, lo, hi))
             # Dedup by text so a mixed quiz never repeats wording (a
             # visual "how many sides…" appears at most once).
             if signature not in seen_sig and text not in seen_text:
@@ -1790,6 +1709,27 @@ def answer_kind(correct: int | str) -> AnswerKind:
     return AnswerKind.text
 
 
+_REMAINDER_ANSWER_RE = re.compile(r"^(\d+) R (\d+)$")
+_REMAINDER_TYPED_RE = re.compile(
+    r"^(\d+)\s*(?:r|rem|remainder)\.?\s*(\d+)$", re.IGNORECASE
+)
+_MIXED_ANSWER_RE = re.compile(r"^\d+ \d+/\d+$")
+_MIXED_TYPED_RE = re.compile(r"^(\d+)\s*(?:\s|\band\b|\+|-)\s*(\d+)\s*/\s*(\d+)$", re.IGNORECASE)
+
+
+def _normalize_remainder(s: str) -> str | None:
+    """"2 R 3", "2r3", "2 rem 3" and "2 remainder 3" are one answer."""
+    m = _REMAINDER_TYPED_RE.match(s.strip())
+    return f"{int(m.group(1))} R {int(m.group(2))}" if m else None
+
+
+def _normalize_mixed(s: str) -> str | None:
+    """"2 3/5", "2  3/5" and "2 and 3/5" are one answer. The parts are
+    kept as typed, so "2 6/10" still isn't simplest form."""
+    m = _MIXED_TYPED_RE.match(s.strip())
+    return f"{int(m.group(1))} {int(m.group(2))}/{int(m.group(3))}" if m else None
+
+
 def grade_answer(correct: int | str, user: str | None) -> bool:
     """Compare a typed answer against the key.
 
@@ -1797,7 +1737,9 @@ def grade_answer(correct: int | str, user: str | None) -> bool:
     all match a correct answer of 0.5 (kids type trailing zeros).
     Fraction answers ("3/4") stay exact string matches on purpose — the
     question asks for simplest form, so "6/8" must NOT be accepted.
-    Word answers ("even", "triangle") are case-insensitive.
+    Word answers ("even", "triangle") are case-insensitive. Remainders
+    ("2 R 3") and mixed numbers ("2 3/5") forgive spacing and the words
+    kids use for them ("2 remainder 3", "2 and 3/5"), never the maths.
     """
     if user is None:
         return False
@@ -1813,6 +1755,10 @@ def grade_answer(correct: int | str, user: str | None) -> bool:
     correct_stripped = str(correct).strip()
     if user_stripped.lower() == correct_stripped.lower():
         return True
+    if _REMAINDER_ANSWER_RE.match(correct_stripped):
+        return _normalize_remainder(user_stripped) == correct_stripped
+    if _MIXED_ANSWER_RE.match(correct_stripped):
+        return _normalize_mixed(user_stripped) == correct_stripped
     correct_clock = _normalize_clock(correct_stripped)
     if correct_clock is not None:
         return _normalize_clock(user_stripped) == correct_clock

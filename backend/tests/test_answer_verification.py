@@ -169,6 +169,90 @@ def _fraction_expression(text, answer) -> bool:
     return True
 
 
+def _bigger_fraction(text, answer) -> bool:
+    m = re.fullmatch(r"Which is bigger: (\d+/\d+) or (\d+/\d+)\?", text)
+    if not m:
+        return False
+    a, b = m.group(1), m.group(2)
+    assert Fraction(a) != Fraction(b), f"no bigger one: {text}"
+    assert str(answer) == (a if Fraction(a) > Fraction(b) else b), (text, answer)
+    return True
+
+
+def _equivalent_fraction(text, answer) -> bool:
+    """`Fill in the missing number: 1/2 = ?/8` (or `= 4/?`)."""
+    m = re.fullmatch(r"Fill in the missing number: (\d+)/(\d+) = (\d+|\?)/(\d+|\?)", text)
+    if not m:
+        return False
+    num, den = int(m.group(1)), int(m.group(2))
+    top, bottom = m.group(3), m.group(4)
+    assert (top == "?") != (bottom == "?"), text
+    filled = Fraction(int(answer), int(bottom)) if top == "?" else Fraction(int(top), int(answer))
+    assert filled == Fraction(num, den), (text, answer)
+    return True
+
+
+def mixed_value(answer) -> Fraction:
+    whole, part = str(answer).split(" ")
+    return int(whole) + Fraction(part)
+
+
+def _remainder_form(text, answer) -> bool:
+    m = re.fullmatch(
+        r"The fraction bar means divide: (\d+)/(\d+) = (\d+) ÷ (\d+)\. "
+        r"Write it as a whole number and a remainder \(e\.g\. 5 R 1\)\.",
+        text,
+    )
+    if not m:
+        return False
+    a, b, a2, b2 = (int(g) for g in m.groups())
+    assert (a, b) == (a2, b2), text
+    assert str(answer) == f"{a // b} R {a % b}", (text, answer)
+    assert a % b != 0, f"no remainder to write: {text}"
+    return True
+
+
+def _to_mixed(text, answer) -> bool:
+    m = re.fullmatch(r"Write (\d+)/(\d+) as a mixed number \(e\.g\. 1 1/2\)\.", text)
+    if not m:
+        return False
+    value = Fraction(int(m.group(1)), int(m.group(2)))
+    assert re.fullmatch(r"\d+ \d+/\d+", str(answer)), (text, answer)
+    assert mixed_value(answer) == value, (text, answer)
+    whole, part = str(answer).split(" ")
+    assert is_reduced(part) and Fraction(part) < 1, (text, answer)
+    return True
+
+
+def _from_mixed(text, answer) -> bool:
+    m = re.fullmatch(r"Write (\d+) (\d+)/(\d+) as an improper fraction\.", text)
+    if not m:
+        return False
+    whole, num, den = (int(g) for g in m.groups())
+    assert num < den, text
+    assert val(answer) == whole + Fraction(num, den), (text, answer)
+    assert is_reduced(answer), (text, answer)
+    return True
+
+
+def _fraction_to_decimal(text, answer) -> bool:
+    m = re.fullmatch(r"Write (\d+)/(\d+) as a decimal\.", text)
+    if not m:
+        return False
+    assert re.fullmatch(r"\d+\.\d+", str(answer)), (text, answer)
+    assert val(answer) == Fraction(int(m.group(1)), int(m.group(2))), (text, answer)
+    return True
+
+
+def _decimal_to_fraction(text, answer) -> bool:
+    m = re.fullmatch(r"Write (\d+\.\d+) as a fraction in simplest form\.", text)
+    if not m:
+        return False
+    assert "/" in str(answer) and is_reduced(answer), (text, answer)
+    assert val(answer) == Fraction(m.group(1)), (text, answer)
+    return True
+
+
 def _bigger_decimal(text, answer) -> bool:
     m = re.fullmatch(r"Which is bigger: ([\d.]+) or ([\d.]+)\?", text)
     if not m:
@@ -197,12 +281,46 @@ CHECKERS = [
     _fraction_expression,
     _bigger_decimal,
     _times_ten,
+    _bigger_fraction,
+    _equivalent_fraction,
+    _remainder_form,
+    _to_mixed,
+    _from_mixed,
+    _fraction_to_decimal,
+    _decimal_to_fraction,
 ]
 
 
-def verify(text: str, answer) -> bool:
+# ---------- questions answered from a picture ----------
+
+
+def pie_fractions(figure) -> list[Fraction]:
+    """The fractions a `pie:` figure draws, operators dropped."""
+    assert figure and figure.startswith("pie:"), figure
+    return [Fraction(t) for t in figure[4:].split() if "/" in t]
+
+
+def _shaded(text, answer, figure) -> bool:
+    m = re.fullmatch(
+        r"This \w+ is cut into equal slices\. What fraction of it is (shaded|NOT shaded)\?", text
+    )
+    if not m:
+        return False
+    num, den = (int(x) for x in figure[4:].split("/"))
+    expected = num if m.group(1) == "shaded" else den - num
+    # The slice count is the answer, so it must already be simplest form.
+    assert str(answer) == f"{expected}/{den}" and is_reduced(answer), (text, answer, figure)
+    return True
+
+
+FIGURE_CHECKERS = [_shaded]
+
+
+def verify(text: str, answer, figure=None) -> bool:
     """Re-solve one question. False means no checker recognised it."""
-    return any(check(text, answer) for check in CHECKERS)
+    if any(check(text, answer) for check in CHECKERS):
+        return True
+    return bool(figure) and any(check(text, answer, figure) for check in FIGURE_CHECKERS)
 
 
 def _sweep(math_type: MathType):
@@ -221,7 +339,7 @@ def _sweep(math_type: MathType):
 def test_printed_question_and_stored_answer_agree(math_type):
     checked = 0
     for _grade, _difficulty, q in _sweep(math_type):
-        assert verify(q.question, q.correctAnswer), f"unrecognised: {q.question!r}"
+        assert verify(q.question, q.correctAnswer, q.figure), f"unrecognised: {q.question!r}"
         checked += 1
     assert checked > 1000, f"only {checked} {math_type.value} questions swept"
 
@@ -233,7 +351,7 @@ def test_no_question_escapes_the_checker():
     unrecognised = set()
     for math_type in ARITHMETIC_TYPES:
         for _grade, _difficulty, q in _sweep(math_type):
-            if not verify(q.question, q.correctAnswer):
+            if not verify(q.question, q.correctAnswer, q.figure):
                 unrecognised.add(q.question)
     assert not unrecognised, sorted(unrecognised)[:5]
 
@@ -247,7 +365,7 @@ def test_mixed_quizzes_carry_the_same_guarantee():
             for seed in SEEDS:
                 rng = random.Random(seed)
                 for q in generate_questions(MathType.mixed, difficulty, grade, rng=rng):
-                    if verify(q.question, q.correctAnswer):
+                    if verify(q.question, q.correctAnswer, q.figure):
                         checked += 1
     assert checked > 100, f"only {checked} mixed arithmetic questions verified"
 
@@ -272,6 +390,45 @@ def test_the_checker_rejects_an_unreduced_fraction():
     assert verify("1/4 + 1/4 = ? (simplest form)", "1/2")
     with pytest.raises(AssertionError):
         verify("1/4 + 1/4 = ? (simplest form)", "2/4")
+
+
+def test_the_checker_rejects_a_wrong_remainder_and_mixed_number():
+    remainder_q = (
+        "The fraction bar means divide: 13/5 = 13 ÷ 5. "
+        "Write it as a whole number and a remainder (e.g. 5 R 1)."
+    )
+    assert verify(remainder_q, "2 R 3")
+    with pytest.raises(AssertionError):
+        verify(remainder_q, "3 R 2")
+    assert verify("Write 13/5 as a mixed number (e.g. 1 1/2).", "2 3/5")
+    with pytest.raises(AssertionError):
+        verify("Write 12/8 as a mixed number (e.g. 1 1/2).", "1 4/8")
+
+
+def test_the_checker_reads_the_picture():
+    q = "This pizza is cut into equal slices. What fraction of it is NOT shaded?"
+    assert verify(q, "5/8", "pie:3/8")
+    with pytest.raises(AssertionError):
+        verify(q, "3/8", "pie:3/8")
+
+
+def test_every_pie_draws_the_numbers_its_question_prints():
+    """A picture that disagrees with its question is worse than none: the
+    fractions drawn must be ones the question shows (or, for "what is
+    shaded?", the only thing it has to show)."""
+    for math_type in ARITHMETIC_TYPES:
+        for _grade, _difficulty, q in _sweep(math_type):
+            if not q.figure:
+                continue
+            assert q.figure.startswith("pie:"), q.figure
+            drawn = q.figure[4:].split()
+            for token in drawn:
+                assert token in {"+", "-"} or re.fullmatch(r"\d+/\d+", token), q.figure
+                if "/" in token:
+                    num, den = (int(x) for x in token.split("/"))
+                    assert 1 <= den <= 12 and 0 <= num <= 3 * den, q.figure
+                    if "shaded" not in q.question:
+                        assert token in q.question, (q.question, q.figure)
 
 
 def test_the_checker_rejects_a_wrong_solution_to_an_equation():

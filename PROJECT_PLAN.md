@@ -265,6 +265,35 @@ not just missing coverage.
 
 Completed items, newest first.
 
+### 2026-10-04 — fractions: pie charts, stacked fractions, decimals and stories
+
+- **Fractions read as fractions.** "1/4 + 2/9" on one line was hard to
+  read on a phone. `MathText` stacks every `a/b` the client prints
+  (question, options, results, explanations, and a "You wrote:" echo
+  under the answer box); the backend text and what a kid types stay
+  plain `a/b`.
+- **Pictures for the younger grades.** A new `pie:` figure string
+  (`pie:3/8`, `pie:2/6 + 3/6`, `pie:13/5`) is drawn by `FractionPies`;
+  `QuestionFigure` picks pies or the geometry `ShapeFigure`. Any
+  factory can now return an optional fifth value, the figure.
+- **The fractions topic is a five-rung ladder** (`fraction_questions.py`):
+  pictures (shaded part, which is bigger, same-slice sums) → equivalent
+  fractions → more than one whole (13/5 = 13 ÷ 5 = 2 R 3 = 2 3/5) →
+  fractions ⇄ decimals (1/4 = 0.25) → multiplication and mixed numbers
+  both ways. Pictures fade out as the grades go up. Before this,
+  fraction ⇄ decimal only existed as grade-5-hard *division*
+  ("3 ÷ 4 as a decimal"); the decimals topic itself never touched it.
+- **New answer shapes:** remainders ("2 R 3", also accepted as "2r3" or
+  "2 remainder 3") and mixed numbers ("2 3/5", also "2 and 3/5"; still
+  simplest form only), with their own multiple-choice distractors.
+- **Fraction word problems** (`fraction_stories.py`): pizza slices
+  (G2 medium), sharing half a pizza, birthday cake, note values (G3+),
+  a party's worth of pizza as a mixed number and metronome-marking
+  conversions (16th = 150 → 75 eighths a minute) at G5 hard. These are
+  the only word problems whose answers can be fractions.
+- Every new question shape is re-solved from its text in
+  `test_answer_verification.py` / `test_fraction_stories.py`.
+
 ### 2026-08-03 — repeated questions, and multiple choice that gave itself away
 
 Four faults reported from play, all §2.1.

@@ -3,7 +3,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import confetti from "canvas-confetti";
 import type { QuizResult } from "@/lib/api";
 import { recommendationText, type Difficulty, type Grade } from "@/data/quizConfig";
-import ShapeFigure from "./ShapeFigure";
+import MathText from "./MathText";
+import QuestionFigure from "./QuestionFigure";
 
 interface Props {
   result: QuizResult;
@@ -99,13 +100,13 @@ const ResultsScreen = ({ result, level, onTryLevel, onRedo, onHome }: Props) => 
               <span className="text-xl">{r.correct ? "✅" : "❌"}</span>
               <div className="flex-1">
                 {r.figure && (
-                  <ShapeFigure shape={r.figure} className="w-16 h-16 mb-1" />
+                  <QuestionFigure figure={r.figure} size="small" />
                 )}
-                <p className="font-heading font-semibold whitespace-pre-line">{r.question}</p>
+                <p className="font-heading font-semibold whitespace-pre-line"><MathText text={r.question} /></p>
                 <p className="text-sm text-muted-foreground">
-                  Your answer: <span className="font-bold">{r.userAnswer ?? "—"}</span>
+                  Your answer: <span className="font-bold">{r.userAnswer ? <MathText text={r.userAnswer} /> : "—"}</span>
                   {!r.correct && (
-                    <> · Correct: <span className="font-bold text-success">{String(r.correctAnswer)}</span></>
+                    <> · Correct: <span className="font-bold text-success"><MathText text={String(r.correctAnswer)} /></span></>
                   )}
                 </p>
               </div>
@@ -143,8 +144,8 @@ const ResultsScreen = ({ result, level, onTryLevel, onRedo, onHome }: Props) => 
                 transition={{ delay: i * 0.1 }}
                 className="p-4 rounded-xl bg-card border-2 border-secondary/40"
               >
-                <p className="font-heading font-semibold mb-1 whitespace-pre-line">{r.question}</p>
-                <p className="text-sm font-body text-muted-foreground">{r.explanation}</p>
+                <p className="font-heading font-semibold mb-1 whitespace-pre-line"><MathText text={r.question} /></p>
+                <p className="text-sm font-body text-muted-foreground"><MathText text={r.explanation} /></p>
               </motion.div>
             ))}
           </motion.div>

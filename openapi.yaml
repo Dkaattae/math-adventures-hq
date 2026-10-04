@@ -478,7 +478,13 @@ components:
         figure:
           type: string
           nullable: true
-          description: Shape name to draw for a visual geometry question (e.g. "pentagon"); null otherwise.
+          description: |
+            A picture to draw with the question; null for none. Geometry
+            uses a shape name ("pentagon"), "angle:<degrees>" or
+            "rect:<w>x<h>". Fractions use "pie:" followed by
+            space-separated fractions and operators — "pie:3/8",
+            "pie:2/6 + 3/6", "pie:1/3 1/5" (to compare), "pie:13/5"
+            (two full pies and 3/5 of a third).
           example: "pentagon"
         answerKind: { $ref: "#/components/schemas/AnswerKind" }
         timeLimitSeconds:
