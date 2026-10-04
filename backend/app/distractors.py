@@ -37,6 +37,8 @@ SYMBOLS = ("<", ">", "=")
 EVEN_ODD = ("even", "odd")
 
 _FRACTION_RE = re.compile(r"^-?\d+/\d+$")
+_MIXED_RE = re.compile(r"^(\d+) (\d+)/(\d+)$")       # "2 3/5"
+_REMAINDER_RE = re.compile(r"^(\d+) R (\d+)$")       # "2 R 3"
 _DECIMAL_RE = re.compile(r"^-?\d+\.\d+$")
 _CLOCK_RE = re.compile(r"^(\d{1,2}):([0-5]\d)$")
 _INT_RE = re.compile(r"^-?\d+$")
@@ -89,6 +91,10 @@ def kind_of(answer: str) -> str:
         return "clock"
     if _FRACTION_RE.match(answer):
         return "fraction"
+    if _MIXED_RE.match(answer):
+        return "mixed"
+    if _REMAINDER_RE.match(answer):
+        return "remainder"
     if _DECIMAL_RE.match(answer):
         return "decimal"
     if _INT_RE.match(answer):
@@ -286,6 +292,49 @@ def fraction_distractors(s: str, rng: random.Random) -> list[str]:
     return out
 
 
+def mixed_distractors(s: str, rng: random.Random) -> list[str]:
+    """Mixed numbers: the whole part off by one, or the leftover slices
+    miscounted — and the improper fraction's numerator kept as the top
+    ("13/5 → 2 13/5"), which is what forgetting to subtract looks like."""
+    whole, num, den = (int(x) for x in _MIXED_RE.match(s).groups())
+    out: list[str] = []
+
+    def offer(w: int, n: int, d: int):
+        if w < 1 or n < 1 or d < 2 or n == d:
+            return
+        text = f"{w} {n}/{d}"
+        if text != s and text not in out:
+            out.append(text)
+
+    offer(whole + 1, num, den)
+    offer(whole, num + 1, den)
+    offer(whole - 1, num, den)
+    offer(whole, den - num, den)
+    offer(whole, num - 1, den)
+    offer(whole, whole * den + num, den)
+    return out
+
+
+def remainder_distractors(s: str, rng: random.Random) -> list[str]:
+    """"q R r": one group too few or too many, or the remainder slipped."""
+    quotient, rest = (int(x) for x in _REMAINDER_RE.match(s).groups())
+    out: list[str] = []
+
+    def offer(q: int, r: int):
+        if q < 0 or r < 0:
+            return
+        text = f"{q} R {r}"
+        if text != s and text not in out:
+            out.append(text)
+
+    offer(quotient + 1, rest)
+    offer(quotient - 1, rest)
+    offer(quotient, rest + 1)
+    offer(quotient, rest - 1)
+    offer(rest, quotient)
+    return out
+
+
 def clock_distractors(s: str, rng: random.Random) -> list[str]:
     """Other times of day: an hour out, or minutes mixed up."""
     hour, minute = (int(x) for x in _CLOCK_RE.match(s).groups())
@@ -379,6 +428,12 @@ def build_options(
             add(value)
     elif kind == "fraction":
         for value in fraction_distractors(correct_str, rng):
+            add(value)
+    elif kind == "mixed":
+        for value in mixed_distractors(correct_str, rng):
+            add(value)
+    elif kind == "remainder":
+        for value in remainder_distractors(correct_str, rng):
             add(value)
     elif kind == "clock":
         for value in clock_distractors(correct_str, rng):

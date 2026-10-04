@@ -21,7 +21,8 @@ export interface Question {
   question: string;
   // Present only for multiple-choice quizzes.
   options?: string[] | null;
-  // Present for visual geometry: a shape name to draw (e.g. "pentagon").
+  // A picture to draw: a geometry shape ("pentagon", "angle:60", "rect:6x3")
+  // or fraction pies ("pie:3/8", "pie:1/4 + 2/9"); see QuestionFigure.
   figure?: string | null;
   answerKind?: AnswerKind;
   /** Seconds on the clock for this question — long scenes need reading time. */

@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { Question } from "@/lib/api";
-import ShapeFigure from "./ShapeFigure";
+import MathText from "./MathText";
+import QuestionFigure from "./QuestionFigure";
 
 interface Props {
   questions: Question[];
@@ -288,7 +289,7 @@ const QuizScreen = ({ questions, onFinish, onQuit }: Props) => {
             }`}>
               {questions[current].figure && (
                 <div className="mb-4">
-                  <ShapeFigure shape={questions[current].figure!} />
+                  <QuestionFigure figure={questions[current].figure!} />
                 </div>
               )}
               {/* Word problems arrive as a titled list over several
@@ -299,7 +300,7 @@ const QuizScreen = ({ questions, onFinish, onQuit }: Props) => {
                   isScene ? "text-base md:text-lg leading-relaxed" : "text-2xl md:text-3xl"
                 }`}
               >
-                {questions[current].question}
+                <MathText text={questions[current].question} />
               </p>
             </div>
             {isMultipleChoice ? (
@@ -318,7 +319,7 @@ const QuizScreen = ({ questions, onFinish, onQuit }: Props) => {
                           : "bg-card border-border hover:border-primary/40"
                       }`}
                     >
-                      {opt}
+                      <MathText text={opt} />
                     </motion.button>
                   );
                 })}
@@ -334,6 +335,13 @@ const QuizScreen = ({ questions, onFinish, onQuit }: Props) => {
                 className="w-full px-5 py-4 text-xl text-center rounded-2xl border-2 border-border bg-card font-heading focus:outline-none focus:border-primary focus:ring-2 focus:ring-ring/30 transition-all"
                 autoFocus
               />
+            )}
+            {/* "13/5" typed on one line is the hard-to-read form the
+                question avoids, so echo it back stacked. */}
+            {!isMultipleChoice && inputVal.includes("/") && (
+              <p className="text-center text-lg font-heading text-muted-foreground" aria-live="polite">
+                You wrote: <span className="text-foreground font-bold"><MathText text={inputVal} /></span>
+              </p>
             )}
           </motion.div>
         </AnimatePresence>

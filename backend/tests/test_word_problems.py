@@ -281,8 +281,17 @@ def _choice_numbers(q):
 # ---------- answers stay typable ----------
 
 
+_FRACTION_ANSWER = re.compile(r"^(\d+ )?\d+/\d+$")
+
+
 def test_answers_are_whole_non_negative_numbers_everywhere():
+    """Whole numbers, except the fraction stories (pizza, cake), whose
+    answer is a fraction or a mixed number by design."""
     for q in _every_question():
+        if isinstance(q.correctAnswer, str):
+            assert _FRACTION_ANSWER.match(q.correctAnswer), q.question
+            assert re.search(r"pizza|\bcake\b", q.question), q.question
+            continue
         assert isinstance(q.correctAnswer, int), q.question
         assert q.correctAnswer >= 0, q.question
 

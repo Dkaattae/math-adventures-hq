@@ -32,7 +32,9 @@ Three things keep them from reading like a form:
 
 Conventions that keep answers typable on a phone: money is whole dollars,
 quantities are whole and at least 2 (so no line reads "1 apples"), and
-every answer is a plain non-negative integer.
+every answer is a plain non-negative integer — except the fraction
+stories (pizza, cake, music; see fraction_stories.py), whose answers are
+simplest-form fractions or mixed numbers because that's the question.
 """
 from __future__ import annotations
 
@@ -41,6 +43,7 @@ from dataclasses import dataclass
 from functools import partial
 from typing import Callable
 
+from . import fraction_stories as fs
 from .rotation import rotating
 
 # A wide pool so a 10-question quiz rarely repeats a character. Each
@@ -1196,14 +1199,20 @@ def tally_difference_small(rng: random.Random, lo: int, hi: int, *, scale: str =
     return tally_difference(rng, lo, hi, max_value=5, scale=scale)
 
 
-TIER_LIST_PLUS = TIER_LIST + (tally_total_small, tally_difference_small)
+# Fraction stories (fraction_stories.py) ride along from grade 2 medium:
+# counting pizza slices first, then sharing and cake, then a party's
+# worth of pizza and metronome markings at grade 5 hard. They are the
+# only word problems whose answers can be fractions or mixed numbers.
+TIER_LIST_PLUS = TIER_LIST + (tally_total_small, tally_difference_small, fs.pizza_eaten)
 TIER_PRICES = (
     priced_total, priced_change, priced_split, priced_difference,
     tally_total, tally_difference, tally_missing,
+    fs.pizza_share, fs.cake_left, fs.music_count,
 )
 TIER_DEALS = (
     deal_total, deal_saving, choice_cheapest, choice_specified,
     priced_split, tally_missing,
+    fs.pizza_party, fs.metronome, fs.pizza_share,
 )
 
 

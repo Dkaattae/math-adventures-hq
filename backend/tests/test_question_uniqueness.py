@@ -217,7 +217,8 @@ def test_division_fraction_answers_are_simplified():
         for q in qs:
             if not isinstance(q.correctAnswer, str) or "/" not in q.correctAnswer:
                 continue
-            num_s, den_s = q.correctAnswer.split("/")
+            # Mixed numbers ("2 3/5") are checked on their fraction part.
+            num_s, den_s = q.correctAnswer.split(" ")[-1].split("/")
             num, den = int(num_s), int(den_s)
             assert gcd(num, den) == 1, f"unsimplified fraction: {q.correctAnswer}"
 
@@ -353,12 +354,16 @@ def test_algebra_two_step_answers_are_non_negative_integers():
             assert isinstance(answer, int) and answer >= 0
 
 
-def test_fractions_basic_tier_is_fraction_of_whole_only():
-    rng = random.Random(0)
-    for _ in range(10):
-        qs = generate_questions(MathType.fractions, Difficulty.easy, Grade.K, rng=rng)
-        for q in qs:
-            assert q.question.startswith("What is"), q.question
+def test_fractions_first_tier_always_has_a_picture():
+    """Grade 2-3 easy fractions are for looking at: every question comes
+    with pies, and none of it needs mixed numbers or decimals yet."""
+    for grade in (Grade.G2, Grade.G3):
+        for seed in range(10):
+            rng = random.Random(seed)
+            qs = generate_questions(MathType.fractions, Difficulty.easy, grade, rng=rng)
+            for q in qs:
+                assert q.figure and q.figure.startswith("pie:"), q.question
+                assert "mixed number" not in q.question and "decimal" not in q.question
 
 
 def test_fractions_advanced_tier_unlocks_unlike_denominators_and_multiplication():
@@ -389,7 +394,8 @@ def test_fraction_answers_are_simplified():
         for q in qs:
             if not isinstance(q.correctAnswer, str) or "/" not in q.correctAnswer:
                 continue
-            num_s, den_s = q.correctAnswer.split("/")
+            # Mixed numbers ("2 3/5") are checked on their fraction part.
+            num_s, den_s = q.correctAnswer.split(" ")[-1].split("/")
             assert gcd(int(num_s), int(den_s)) == 1, f"unsimplified fraction: {q.correctAnswer}"
 
 
