@@ -21,6 +21,17 @@ Completed work moves to the **Done** section at the bottom.
   and algebra stay single-form on purpose — the operation *is* the skill
   there, and difficulty genuinely is the size of the numbers. If any of
   those later feels flat at grade 5, the shape treatment is the template.
+- **Grade focus chart and one level ladder (2026-10-27).** Grade 5 was
+  reported as far too easy, mixed quizzes especially: mixed drew evenly
+  from all 14 unlocked topics, and the shared number range grew by only
+  3 per grade (grade 5 easy was sums up to 20). `app/curriculum.py` now
+  holds a per-grade focus/review chart for mixed, and a level
+  (`2 × grade + difficulty`) that every topic reads, so grade N hard and
+  grade N+1 easy are the same level. Arithmetic got per-level number
+  bands (multi-digit × and ÷, two-digit divisors, decimals at grade 5),
+  fractions a grade-5-hard "mastery" tier, and grades 4–5 arithmetic
+  longer clocks. Percentages stay as grade-5 review, a step toward
+  grade 6.
 - Printable worksheet export (the generators already produce clean
   question/answer pairs).
 - Practice mode (untimed) vs. challenge mode (streaks; the `badge` field

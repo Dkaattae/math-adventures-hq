@@ -18,18 +18,21 @@ from __future__ import annotations
 
 import random
 import re
+from fractions import Fraction
 from math import factorial, gcd
 from typing import Callable, NamedTuple
 
-from . import fraction_questions, measurement, money_time, percentages, word_problems
+from . import curriculum, fraction_questions, measurement, money_time, percentages, word_problems
 from .distractors import build_options
 from .question_times import question_seconds
+from .curriculum import MAX_LEVEL
 from .rotation import rotating
 from .models import AnswerKind, AnswerMode, Difficulty, Grade, MathType, QuestionInternal
 
 _MAX_ATTEMPTS = 200
 
-# Every math type that a "mixed" quiz can draw from (mixed itself excluded).
+# Every math type a "mixed" quiz could draw from (mixed itself excluded).
+# Which of them a grade actually mixes is curriculum.GRADE_FOCUS.
 _MIXED_TYPES: list[MathType] = [
     MathType.addition,
     MathType.subtraction,
@@ -86,14 +89,19 @@ def min_grade_for_type(math_type: MathType) -> Grade:
     return Grade.K if g == 0 else Grade(str(g))
 
 
+#: The gentle (lo, hi) the tiered topics' scenes and fractions are sized
+#: from, per level (curriculum.level). Close to the old per-grade range
+#: it replaced, but read off the level so grade N hard and grade N+1
+#: easy see the same numbers. The one-line arithmetic topics use the
+#: steeper tables further down instead.
+_SCENE_RANGES: list[tuple[int, int]] = [
+    (1, 5), (2, 10), (3, 12), (3, 14), (4, 16), (4, 18), (5, 20),
+    (5, 22), (5, 24), (5, 27), (5, 30), (5, 32), (5, 35),
+]
+
+
 def _difficulty_range(difficulty: Difficulty, grade: Grade) -> tuple[int, int]:
-    g = 0 if grade == Grade.K else int(grade.value)
-    base = g * 3
-    if difficulty == Difficulty.easy:
-        return 1, base + 5
-    if difficulty == Difficulty.medium:
-        return 2, base + 10
-    return 5, base + 20
+    return _SCENE_RANGES[curriculum.level(difficulty, grade)]
 
 
 # ---------- per-type factories ----------
@@ -151,41 +159,7 @@ def _sub_negative(rng: random.Random, lo: int, hi: int):
     )
 
 
-def _make_subtraction(rng: random.Random, lo: int, hi: int):
-    return _sub_positive(rng, lo, hi)
-
-
-def _make_subtraction_with_negatives(rng: random.Random, lo: int, hi: int):
-    # ~50/50 mix so a hard quiz has both positive and negative answers.
-    return rng.choice([_sub_positive, _sub_negative])(rng, lo, hi)
-
-
-def _make_multiplication(rng: random.Random, lo: int, hi: int):
-    m1 = rng.randint(1, max(2, hi // 2))
-    m2 = rng.randint(1, max(2, hi // 3))
-    lo_, hi_ = (m1, m2) if m1 <= m2 else (m2, m1)
-    return (
-        ("mul", lo_, hi_),
-        f"{m1} × {m2} = ?",
-        m1 * m2,
-        f"{m1} × {m2} = {m1 * m2}. Think of {m1} groups of {m2}! 🎯",
-    )
-
-
 # ---------- division: integer, remainder, fraction, decimal ----------
-
-
-def _div_integer(rng: random.Random, lo: int, hi: int):
-    divisor = rng.randint(2, max(3, hi // 3))
-    answer = rng.randint(1, max(2, hi // 2))
-    dividend = divisor * answer
-    return (
-        ("div", dividend, divisor),
-        f"{dividend} ÷ {divisor} = ?",
-        answer,
-        f"{dividend} ÷ {divisor} = {answer}. "
-        f"{dividend} split into {divisor} equal groups gives {answer}! 🍰",
-    )
 
 
 def _div_remainder(rng: random.Random, lo: int, hi: int):
@@ -239,18 +213,6 @@ def _div_decimal(rng: random.Random, lo: int, hi: int):
         result,
         f"{dividend} ÷ {divisor} = {result} 💡",
     )
-
-
-def _make_division(rng: random.Random, lo: int, hi: int):
-    return _div_integer(rng, lo, hi)
-
-
-def _make_division_with_remainder(rng: random.Random, lo: int, hi: int):
-    return rng.choice([_div_integer, _div_remainder])(rng, lo, hi)
-
-
-def _make_division_advanced(rng: random.Random, lo: int, hi: int):
-    return rng.choice([_div_integer, _div_remainder, _div_fraction, _div_decimal])(rng, lo, hi)
 
 
 # ---------- algebra: several templates for variety ----------
@@ -914,14 +876,16 @@ _COMPARISON_TIERS = {
 
 
 def _comparison_tier(difficulty: Difficulty, g: int) -> str:
-    """Numbers alone until grade 3, then expressions on both sides."""
-    if g >= 5 and difficulty != Difficulty.easy:
+    """Numbers alone until grade 3, then expressions on both sides —
+    read off the level ladder (curriculum.level)."""
+    lvl = curriculum.level(difficulty, Grade.K if g == 0 else Grade(str(g)))
+    if lvl >= 11:
         return "powers"
-    if g >= 4 or (g >= 3 and difficulty == Difficulty.hard) or g >= 5:
+    if lvl >= 8:
         return "operators"
-    if g >= 3:
+    if lvl >= 7:
         return "sums"
-    if g >= 2 and difficulty != Difficulty.easy:
+    if lvl >= 5:
         return "numbers"
     return "basic"
 
@@ -1010,6 +974,374 @@ def _make_decimals_basic(rng: random.Random, lo: int, hi: int):
 def _make_decimals_advanced(rng: random.Random, lo: int, hi: int):
     return rng.choice(
         [_dec_add_tenths, _dec_sub_tenths, _dec_add_hundredths, _dec_compare, _dec_times_ten]
+    )(rng, lo, hi)
+
+
+# ---------- the level ladder: number sizes per level ----------
+#
+# The one-line arithmetic topics size their numbers from the level
+# (curriculum.level: 2 × grade + difficulty, so grade 3 hard == grade 4
+# easy), one table per topic and one row per level 0-12. The old shared
+# range grew by 3 per grade, which left grade 5 on sums of numbers up to
+# 35 and products up to 17 × 11 — third-grade work. Topics that pick a
+# *tier* of question shapes (fractions, word problems, …) read the same
+# level through their tier functions.
+
+#: Operand range for addition and subtraction.
+_ADD_BANDS: list[tuple[int, int]] = [
+    (1, 5), (1, 9), (2, 12), (4, 16),        # K – grade 1: within 10, then 20
+    (10, 40), (15, 70), (25, 99),            # grade 2: two-digit, regrouping
+    (100, 499), (150, 999),                  # grade 3: three-digit
+    (1000, 4999), (1000, 9999),              # grade 4: four-digit
+    (10000, 49999), (10000, 99999),          # grade 5: five-digit (and decimals)
+]
+
+#: Largest whole part of a decimal operand, from the level decimals join
+#: addition and subtraction.
+_ADD_DECIMAL_WHOLES = {11: 99, 12: 999}
+
+#: (first factor range, second factor range) for multiplication.
+_MUL_BANDS: list[tuple[tuple[int, int], tuple[int, int]]] = [
+    ((1, 3), (1, 5)), ((1, 3), (1, 5)),      # (not offered before grade 2)
+    ((1, 5), (1, 5)), ((1, 5), (1, 5)),
+    ((1, 5), (1, 5)),                        # grade 2: equal groups
+    ((2, 5), (1, 10)), ((2, 5), (2, 10)),    # ×2 … ×5 facts
+    ((2, 10), (2, 10)),                      # grade 3: all facts to 10 × 10
+    ((11, 49), (2, 9)),                      # two-digit × one-digit
+    ((101, 999), (2, 9)),                    # grade 4: three-digit × one-digit
+    ((12, 99), (12, 99)),                    # two-digit × two-digit
+    ((101, 999), (11, 99)),                  # grade 5: three-digit × two-digit
+    ((1001, 9999), (11, 99)),                # four-digit × two-digit
+]
+
+#: (divisor range, quotient range) for division.
+_DIV_BANDS: list[tuple[tuple[int, int], tuple[int, int]]] = [
+    ((2, 3), (1, 5)), ((2, 3), (1, 5)),      # (not offered before grade 3)
+    ((2, 5), (1, 5)), ((2, 5), (1, 5)),
+    ((2, 5), (1, 5)), ((2, 5), (1, 10)),
+    ((2, 5), (2, 10)),                       # grade 3: facts …
+    ((2, 10), (2, 10)),                      # … to 100 ÷ 10
+    ((2, 9), (11, 30)),                      # two-digit ÷ one-digit
+    ((2, 9), (20, 199)),                     # grade 4: three-digit ÷ one-digit
+    ((2, 9), (100, 999)),                    # four-digit ÷ one-digit
+    ((11, 49), (11, 99)),                    # grade 5: two-digit divisors
+    ((12, 99), (21, 199)),
+]
+
+#: (lo, hi) for the topics still written against a plain range (algebra,
+#: order of operations). Steeper than `_SCENE_RANGES`.
+_LEVEL_RANGES: list[tuple[int, int]] = [
+    (1, 5), (1, 8), (1, 10), (2, 13), (2, 16), (2, 20), (3, 25),
+    (4, 30), (5, 40), (6, 50), (8, 60), (10, 80), (12, 100),
+]
+
+#: Order of operations is about precedence, not long multiplication: its
+#: factors are a quarter of `hi`, so `hi` stops where they reach 12.
+_OOO_MAX_HI = 48
+
+#: The remainder example the question shows, which no answer may equal.
+_REMAINDER_EXAMPLE = "5 R 1"
+
+
+def _level_band(table: list, lvl: int):
+    return table[max(0, min(lvl, len(table) - 1))]
+
+
+def _fmt_decimal(value: Fraction) -> str:
+    """A terminating decimal without trailing zeros ("4.2", "0.0425")."""
+    scaled, rest = divmod(value.numerator * 10**6, value.denominator)
+    assert rest == 0, value  # every caller builds at most millionths
+    s = f"{scaled // 10**6}.{scaled % 10**6:06d}".rstrip("0")
+    return s.rstrip(".")
+
+
+def _decimal_answer(value: Fraction) -> int | str:
+    return int(value) if value.denominator == 1 else _fmt_decimal(value)
+
+
+def _add_decimals(rng: random.Random, max_whole: int):
+    """Two hundredths operands with up to `max_whole` wholes each."""
+    a, b = rng.randint(101, max_whole * 100 + 99), rng.randint(101, max_whole * 100 + 99)
+    lo_, hi_ = (a, b) if a <= b else (b, a)
+    return (
+        ("add", "dec", lo_, hi_),
+        f"{_fmt_hundredths(a)} + {_fmt_hundredths(b)} = ?",
+        _fmt_hundredths(a + b),
+        f"Line up the decimal points, then add like whole numbers: "
+        f"{_fmt_hundredths(a)} + {_fmt_hundredths(b)} = {_fmt_hundredths(a + b)}. 🔢",
+    )
+
+
+def _sub_decimals(rng: random.Random, max_whole: int):
+    a = rng.randint(201, max_whole * 100 + 99)
+    b = rng.randint(101, a - 1)
+    return (
+        ("sub", "dec", a, b),
+        f"{_fmt_hundredths(a)} - {_fmt_hundredths(b)} = ?",
+        _fmt_hundredths(a - b),
+        f"Line up the decimal points, then subtract like whole numbers: "
+        f"{_fmt_hundredths(a)} - {_fmt_hundredths(b)} = {_fmt_hundredths(a - b)}. 🔢",
+    )
+
+
+def _addition_at(lvl: int) -> Factory:
+    lo, hi = _level_band(_ADD_BANDS, lvl)
+    max_whole = _ADD_DECIMAL_WHOLES.get(min(lvl, MAX_LEVEL))
+
+    def factory(rng: random.Random, _lo: int, _hi: int):
+        if max_whole and rng.random() < 0.4:
+            return _add_decimals(rng, max_whole)
+        return _make_addition(rng, lo, hi)
+
+    return factory
+
+
+def _subtraction_at(lvl: int, negatives: bool) -> Factory:
+    lo, hi = _level_band(_ADD_BANDS, lvl)
+    max_whole = _ADD_DECIMAL_WHOLES.get(min(lvl, MAX_LEVEL))
+
+    def factory(rng: random.Random, _lo: int, _hi: int):
+        roll = rng.random()
+        if negatives and roll < 0.35:
+            # Below zero is about the idea, not the digits: two-digit numbers.
+            return _sub_negative(rng, 10, 99)
+        if max_whole and roll > 0.6:
+            return _sub_decimals(rng, max_whole)
+        return _sub_positive(rng, lo, hi)
+
+    return factory
+
+
+def _mul_explanation(m1: int, m2: int) -> str:
+    big, small = (m1, m2) if m1 >= m2 else (m2, m1)
+    if big < 10:
+        return f"{m1} × {m2} = {m1 * m2}. Think of {m1} groups of {m2}! 🎯"
+    if small < 10:
+        tens, ones = big - big % 10, big % 10
+        parts = f"{tens} × {small} + {ones} × {small}" if ones else f"{tens} × {small}"
+        return (
+            f"Split {big} by place value: {parts} = "
+            f"{tens * small}{f' + {ones * small}' if ones else ''} = {m1 * m2}. 🎯"
+        )
+    tens, ones = small - small % 10, small % 10
+    return (
+        f"Split {small} into {tens} and {ones}: {big} × {tens} = {big * tens}, "
+        f"{big} × {ones} = {big * ones}, and {big * tens} + {big * ones} = {m1 * m2}. 🎯"
+    )
+
+
+def _mul_decimal_by_whole(rng: random.Random):
+    d = rng.randint(101, 999)
+    while d % 10 == 0:
+        d = rng.randint(101, 999)
+    w = rng.randint(3, 12)
+    value = Fraction(d, 100) * w
+    return (
+        ("mul", "dec", d, w),
+        f"{_fmt_hundredths(d)} × {w} = ?",
+        _decimal_answer(value),
+        f"Multiply as if there were no point: {d} × {w} = {d * w}. "
+        f"There were two decimal places, so put two back: {_fmt_decimal(value)}. 🎯",
+    )
+
+
+def _multiplication_at(lvl: int) -> Factory:
+    (a_lo, a_hi), (b_lo, b_hi) = _level_band(_MUL_BANDS, lvl)
+
+    def factory(rng: random.Random, _lo: int, _hi: int):
+        if lvl >= MAX_LEVEL and rng.random() < 0.3:
+            return _mul_decimal_by_whole(rng)
+        m1, m2 = rng.randint(a_lo, a_hi), rng.randint(b_lo, b_hi)
+        if a_hi <= 10 and rng.random() < 0.5:  # facts read both ways round
+            m1, m2 = m2, m1
+        lo_, hi_ = (m1, m2) if m1 <= m2 else (m2, m1)
+        return (
+            ("mul", lo_, hi_),
+            f"{m1} × {m2} = ?",
+            m1 * m2,
+            _mul_explanation(m1, m2),
+        )
+
+    return factory
+
+
+def _div_exact_band(rng: random.Random, divisors: tuple[int, int], quotients: tuple[int, int]):
+    divisor, answer = rng.randint(*divisors), rng.randint(*quotients)
+    dividend = divisor * answer
+    if answer <= 10 and divisor <= 10:
+        why = f"{dividend} split into {divisor} equal groups gives {answer}! 🍰"
+    else:
+        why = f"Check it by multiplying back: {divisor} × {answer} = {dividend}. 🍰"
+    return (
+        ("div", dividend, divisor),
+        f"{dividend} ÷ {divisor} = ?",
+        answer,
+        f"{dividend} ÷ {divisor} = {answer}. {why}",
+    )
+
+
+def _div_with_remainder_band(rng: random.Random, divisors: tuple[int, int],
+                             quotients: tuple[int, int]):
+    """Long division with the whole answer written out: 1234 ÷ 7 = 176 R 2."""
+    divisor, quotient = rng.randint(*divisors), rng.randint(*quotients)
+    remainder = rng.randint(1, divisor - 1)
+    dividend = divisor * quotient + remainder
+    answer = f"{quotient} R {remainder}"
+    if answer == _REMAINDER_EXAMPLE:
+        return _div_exact_band(rng, divisors, quotients)
+    return (
+        ("divR", dividend, divisor),
+        f"What is {dividend} ÷ {divisor}? Write it with a remainder "
+        f"(e.g. {_REMAINDER_EXAMPLE}).",
+        answer,
+        f"{divisor} × {quotient} = {divisor * quotient}, and {dividend} − "
+        f"{divisor * quotient} = {remainder} left over: {answer}. 🧮",
+    )
+
+
+def _division_at(lvl: int) -> Factory:
+    divisors, quotients = _level_band(_DIV_BANDS, lvl)
+
+    def exact(rng, _lo, _hi):
+        return _div_exact_band(rng, divisors, quotients)
+
+    def remainder_only(rng, _lo, _hi):
+        # Grade 3: the remainder alone, with small numbers.
+        return _div_remainder(rng, 1, 2 * divisors[1] + 1)
+
+    def full_remainder(rng, _lo, _hi):
+        return _div_with_remainder_band(rng, divisors, quotients)
+
+    if lvl >= MAX_LEVEL:
+        shapes = (exact, full_remainder, exact, full_remainder, _div_fraction, _div_decimal)
+    elif lvl >= 8:
+        shapes = (exact, full_remainder)
+    elif lvl >= 7:
+        shapes = (exact, remainder_only)
+    else:
+        shapes = (exact,)
+
+    def factory(rng: random.Random, lo: int, hi: int):
+        return rng.choice(shapes)(rng, lo, max(hi, 24))
+
+    return factory
+
+
+# ---------- decimals at grade 4-5 ----------
+
+
+def _dec_sub_hundredths(rng: random.Random, lo: int, hi: int):
+    a = rng.randint(105, 995)
+    b = rng.randint(5, a - 1)
+    return (
+        ("decsub100", a, b),
+        f"{_fmt_hundredths(a)} - {_fmt_hundredths(b)} = ?",
+        _fmt_hundredths(a - b),
+        f"Line up the decimal points: {_fmt_hundredths(a)} - {_fmt_hundredths(b)} "
+        f"= {_fmt_hundredths(a - b)}! 🔢",
+    )
+
+
+def _dec_add_big(rng: random.Random, lo: int, hi: int):
+    return _add_decimals(rng, 99)
+
+
+def _dec_sub_big(rng: random.Random, lo: int, hi: int):
+    return _sub_decimals(rng, 99)
+
+
+def _dec_times_power(rng: random.Random, lo: int, hi: int):
+    """× or ÷ by 10 or 100: the point moves, the digits don't."""
+    d = rng.randint(101, 9999)
+    while d % 10 == 0:
+        d = rng.randint(101, 9999)
+    power = rng.choice([10, 100])
+    if rng.random() < 0.5:
+        value, op, way = Fraction(d, 100) * power, "×", "right"
+    else:
+        value, op, way = Fraction(d, 100) / power, "÷", "left"
+    places = "one place" if power == 10 else "two places"
+    return (
+        ("decpow", d, op, power),
+        f"{_fmt_hundredths(d)} {op} {power} = ?",
+        _decimal_answer(value),
+        f"{op} {power} moves the decimal point {places} {way}: "
+        f"{_fmt_hundredths(d)} {op} {power} = {_fmt_decimal(value)}! 🔢",
+    )
+
+
+def _dec_times_whole(rng: random.Random, lo: int, hi: int):
+    t = rng.randint(11, 99)
+    while t % 10 == 0:
+        t = rng.randint(11, 99)
+    w = rng.randint(2, 9)
+    value = Fraction(t, 10) * w
+    return (
+        ("decmulw", t, w),
+        f"{_fmt_tenths(t)} × {w} = ?",
+        _decimal_answer(value),
+        f"{t} tenths × {w} = {t * w} tenths = {_fmt_decimal(value)}! 🔢",
+    )
+
+
+def _dec_times_dec(rng: random.Random, lo: int, hi: int):
+    a, b = rng.randint(2, 39), rng.randint(2, 9)
+    while a % 10 == 0:
+        a = rng.randint(2, 39)
+    value = Fraction(a, 10) * Fraction(b, 10)
+    return (
+        ("decmuld", a, b),
+        f"{_fmt_tenths(a)} × {_fmt_tenths(b)} = ?",
+        _decimal_answer(value),
+        f"Multiply without the points: {a} × {b} = {a * b}. Each number had one "
+        f"decimal place, so the answer has two: {_fmt_decimal(value)}! 🔢",
+    )
+
+
+def _dec_div_whole(rng: random.Random, lo: int, hi: int):
+    w = rng.randint(2, 9)
+    q = rng.randint(11, 99)
+    while q % 10 == 0:
+        q = rng.randint(11, 99)
+    dividend = Fraction(q * w, 10)
+    return (
+        ("decdivw", q * w, w),
+        f"{_fmt_decimal(dividend)} ÷ {w} = ?",
+        _fmt_decimal(Fraction(q, 10)),
+        f"Divide as if there were no point: {q * w} ÷ {w} = {q}, then put the point "
+        f"back: {_fmt_decimal(Fraction(q, 10))}! 🔢",
+    )
+
+
+_DECIMAL_SHAPES_OPS = (
+    _dec_add_hundredths, _dec_sub_hundredths, _dec_compare, _dec_times_power, _dec_times_whole,
+)
+_DECIMAL_SHAPES_FLUENT = (
+    _dec_add_big, _dec_sub_big, _dec_times_power, _dec_times_whole, _dec_times_dec,
+    _dec_div_whole, _dec_compare,
+)
+
+
+def _ooo_brackets_four(rng: random.Random, lo: int, hi: int):
+    """(8 + 4) × 3 - 6 ÷ 2: brackets, then × and ÷, then the subtraction."""
+    a, b = rng.randint(lo, hi // 2), rng.randint(1, max(2, hi // 4))
+    c = rng.randint(2, max(3, hi // 6))
+    e = rng.randint(2, 9)
+    q = rng.randint(1, max(2, ((a + b) * c) // e))
+    d = q * e
+    answer = (a + b) * c - q
+    return (
+        ("ooo_b4", a, b, c, d, e),
+        f"({a} + {b}) × {c} - {d} ÷ {e} = ?",
+        answer,
+        f"Brackets first: {a} + {b} = {a + b}. Then × and ÷: {a + b} × {c} = {(a + b) * c} "
+        f"and {d} ÷ {e} = {q}. Last, subtract: {(a + b) * c} - {q} = {answer}. 📐",
+    )
+
+
+def _make_ooo_fluent(rng: random.Random, lo: int, hi: int):
+    return rng.choice(
+        [_ooo_three_terms, _ooo_parens, _ooo_brackets_four, _ooo_brackets_four]
     )(rng, lo, hi)
 
 
@@ -1210,22 +1542,15 @@ _GEOMETRY_VISUAL: list[VisualGeometryItem] = [
 def _geometry_tier(difficulty: Difficulty, grade: Grade) -> int:
     """0 = identification, 1 = properties, 2 = formulas & reasoning.
 
-    Grade is the primary driver (you don't ask a Kindergartener about
-    volume). Difficulty shifts the tier up or down by one step.
+    Read off the level ladder (curriculum.level), so grade 3 hard —
+    area and perimeter — is grade 4 easy too.
     """
-    g = 0 if grade == Grade.K else int(grade.value)
-    if g <= 1:
-        base_tier = 0
-    elif g <= 3:
-        base_tier = 1
-    else:
-        base_tier = 2
-
-    if difficulty == Difficulty.easy and base_tier > 0:
-        return base_tier - 1
-    if difficulty == Difficulty.hard and base_tier < 2:
-        return base_tier + 1
-    return base_tier
+    lvl = curriculum.level(difficulty, grade)
+    if lvl >= 8:
+        return 2
+    if lvl >= 4:
+        return 1
+    return 0
 
 
 def _geometry_pool(difficulty: Difficulty, grade: Grade) -> list[GeometryItem]:
@@ -1367,76 +1692,76 @@ def _word_problem_tier(difficulty: Difficulty, g: int) -> str:
 
     The scenes get richer as the reading gets easier: one-sentence
     stories, then sifting a list, then scoring rules and prices, then
-    sale offers and cheapest-option comparisons.
+    sale offers and cheapest-option comparisons. Read off the level
+    ladder (curriculum.level), so neighbouring grades meet at one step.
     """
-    if g >= 5 and difficulty == Difficulty.hard:
+    lvl = curriculum.level(difficulty, Grade.K if g == 0 else Grade(str(g)))
+    if lvl >= MAX_LEVEL:
         return "deals"
-    if g >= 5 or (g >= 3 and difficulty != Difficulty.easy) or (
-        g == 2 and difficulty == Difficulty.hard
-    ):
+    if lvl >= 6:
         return "prices"
+    if lvl >= 5:
+        return "list_plus"
     # Kindergarten never gets a list — the reading alone would be the
     # whole task.
-    if g >= 2 or (g == 1 and difficulty == Difficulty.hard):
-        return "list_plus" if g >= 2 and difficulty != Difficulty.easy else "list"
-    return "simple" if difficulty == Difficulty.easy else "simple_wide"
+    if lvl >= 4:
+        return "list"
+    # Equal groups and sharing wait for grade 1 medium: kindergarten
+    # stories only add and take away.
+    return "simple_wide" if lvl >= 3 else "simple"
 
 
 def _pick_factory(math_type: MathType, difficulty: Difficulty, grade: Grade) -> Factory:
     """Select the right factory for this (math_type, difficulty, grade).
 
-    - Subtraction: negative-capable variant kicks in at grade 4+ hard.
-    - Division: remainder questions appear from grade 3 onward at
-      medium/hard; fractions and decimals only at grade 5 hard.
-    - Algebra: two-step equations (ax + b = c) kick in at grade 4+ hard.
-    - Fractions: pie pictures at grade 2-3 easy; remainders and mixed
-      numbers from grade 3 medium; fraction ⇄ decimal from grade 4
-      medium; multiplication at grade 4 hard and grade 5 medium+
-      (fraction_questions.tier_for).
-    - Order of operations: two-term problems only below grade 3/medium;
-      parentheses and three-term expressions unlock at grade 4+ hard.
-    - Word problems: add/sub stories at first; multiplication joins at
-      grade 2+ medium, division at grade 3+ hard.
-    - Comparison: symbol/even-odd/sequences at first; place value at
-      grade 2+ medium; rounding at grade 3+ hard.
-    - Money & time: coin counting and hours→minutes at first; change and
-      to-the-next-hour at grade 2+ medium; quarters and cross-hour
-      elapsed time at grade 3+ hard.
-    - Decimals: tenths add/sub at first; hundredths, comparison, and
-      ×10 at grade 4+ hard.
-    - Percentages: 10/50/100% at first; 20/25/75% at grade 5 hard.
-    - Measurement: big→small conversions at first; reverse direction at
-      grade 3+ medium; mixed units at grade 4+ hard.
-    - Other types use a single factory regardless of difficulty.
+    Everything is chosen by the level (curriculum.level: 2 × grade +
+    difficulty, 0-12), so grade N hard and grade N+1 easy always match.
+
+    - Addition, subtraction, multiplication, division: number sizes from
+      the `_ADD_BANDS` / `_MUL_BANDS` / `_DIV_BANDS` tables. Decimals
+      join + and − at level 11, decimal × whole at 12. Subtraction below
+      zero is a grade 4-5 *hard* extra. Division: remainder-only at
+      level 7, written-out remainders (176 R 2) from 8, fraction and
+      decimal answers at 12.
+    - Algebra: two-step equations (ax + b = c) from level 10.
+    - Fractions: pictures → building → wholes → decimals → advanced →
+      mastery (fraction_questions.tier_for).
+    - Order of operations: two-term problems below level 7, then
+      − and ÷; parentheses and three terms from 10; (a + b) × c − d ÷ e
+      from 11.
+    - Decimals: tenths below 8; hundredths, comparing and ×10 from 8;
+      × and ÷ by 10/100 and decimal × whole at 10; decimal × decimal and
+      decimal ÷ whole from 11.
+    - Word problems, comparison, money & time, percentages, measurement
+      and geometry pick a tier of question shapes from the level.
     """
-    g = 0 if grade == Grade.K else int(grade.value)
+    g = curriculum.grade_index(grade)
+    lvl = curriculum.level(difficulty, grade)
+
+    if math_type == MathType.addition:
+        return _addition_at(lvl)
 
     if math_type == MathType.subtraction:
-        if difficulty == Difficulty.hard and g >= 4:
-            return _make_subtraction_with_negatives
-        return _make_subtraction
+        return _subtraction_at(lvl, negatives=difficulty == Difficulty.hard and g >= 4)
+
+    if math_type == MathType.multiplication:
+        return _multiplication_at(lvl)
 
     if math_type == MathType.division:
-        if difficulty == Difficulty.hard and g >= 5:
-            return _make_division_advanced
-        if g >= 3 and difficulty != Difficulty.easy:
-            return _make_division_with_remainder
-        return _make_division
+        return _division_at(lvl)
 
     if math_type == MathType.algebra:
-        if difficulty == Difficulty.hard and g >= 4:
-            return _make_algebra_hard
-        return _make_algebra
+        return _make_algebra_hard if lvl >= 10 else _make_algebra
 
     if math_type == MathType.fractions:
-        return fraction_questions.tier_factory(
-            fraction_questions.tier_for(difficulty.value, g)
-        )
+        return fraction_questions.tier_factory(fraction_questions.tier_for(lvl))
 
     if math_type == MathType.order_of_operations:
-        if difficulty == Difficulty.hard and g >= 4:
+        if lvl >= 11:
+            return _make_ooo_fluent
+        if lvl >= 10:
             return _make_ooo_advanced
-        if g >= 3 and difficulty != Difficulty.easy:
+        if lvl >= 7:
             return _make_ooo_intermediate
         return _make_ooo_basic
 
@@ -1450,33 +1775,41 @@ def _pick_factory(math_type: MathType, difficulty: Difficulty, grade: Grade) -> 
         return rotating(_COMPARISON_TIERS[tier], tier)
 
     if math_type == MathType.money_time:
-        return money_time.tier_factory(
-            money_time.tier_for(
-                difficulty == Difficulty.easy, difficulty == Difficulty.hard, g
-            )
-        )
+        return money_time.tier_factory(money_time.tier_for(lvl))
 
     if math_type == MathType.decimals:
-        if difficulty == Difficulty.hard and g >= 4:
+        if lvl >= 11:
+            return rotating(_DECIMAL_SHAPES_FLUENT, "fluent")
+        if lvl >= 10:
+            return rotating(_DECIMAL_SHAPES_OPS, "ops")
+        if lvl >= 8:
             return _make_decimals_advanced
         return _make_decimals_basic
 
     if math_type == MathType.percentages:
-        return percentages.tier_factory(
-            percentages.tier_for(difficulty == Difficulty.easy, g)
-        )
+        return percentages.tier_factory(percentages.tier_for(lvl))
 
     if math_type == MathType.measurement:
-        return measurement.tier_factory(
-            measurement.tier_for(
-                difficulty == Difficulty.easy, difficulty == Difficulty.hard, g
-            )
-        )
+        return measurement.tier_factory(measurement.tier_for(lvl))
 
-    return {
-        MathType.addition: _make_addition,
-        MathType.multiplication: _make_multiplication,
-    }[math_type]
+    raise ValueError(f"no factory for {math_type}")
+
+
+def _number_range(math_type: MathType, difficulty: Difficulty, grade: Grade) -> tuple[int, int]:
+    """The (lo, hi) a factory is called with.
+
+    Algebra and order of operations size their numbers from it, so they
+    get the level ladder's range. The band-driven topics ignore it, and
+    the tiered ones (fractions, word problems, …) get the gentler
+    `_SCENE_RANGES` — their scenes were tuned against numbers that size,
+    and their difficulty comes from the tier instead.
+    """
+    if math_type in (MathType.algebra, MathType.order_of_operations):
+        lo, hi = _level_band(_LEVEL_RANGES, curriculum.level(difficulty, grade))
+        if math_type == MathType.order_of_operations:
+            hi = min(hi, _OOO_MAX_HI)
+        return lo, hi
+    return _difficulty_range(difficulty, grade)
 
 
 def _generate_geometry(difficulty: Difficulty, grade: Grade, rng: random.Random):
@@ -1519,7 +1852,7 @@ def _generate_geometry(difficulty: Difficulty, grade: Grade, rng: random.Random)
 
 
 def _generate_typed(math_type: MathType, difficulty: Difficulty, grade: Grade, rng: random.Random):
-    lo, hi = _difficulty_range(difficulty, grade)
+    lo, hi = _number_range(math_type, difficulty, grade)
     factory = _pick_factory(math_type, difficulty, grade)
     questions: list[QuestionInternal] = []
     seen: set[tuple] = set()
@@ -1543,40 +1876,45 @@ def _generate_typed(math_type: MathType, difficulty: Difficulty, grade: Grade, r
     return questions
 
 
-#: Seats in every mixed quiz kept for fractions, once the grade offers
-#: them. Drawn evenly, fractions were one topic of 10-14 — about one
-#: question a quiz, often none — for a skill that runs through every
-#: grade from 2 up. The other seats still draw evenly (fractions included).
-_MIXED_FRACTION_SEATS = 3
+def _mixed_seats(grade: Grade, rng: random.Random) -> list[MathType]:
+    """The topic of each of a mixed quiz's ten questions, in quiz order.
+
+    The grade's focus topics get their fixed seats (curriculum.GRADE_FOCUS);
+    the rest go to its review topics, each at most once while there are
+    enough of them. Drawn evenly from everything unlocked, as this used
+    to be, a 5th grader saw plain addition as often as fractions.
+    """
+    plan = curriculum.grade_focus(grade)
+    seats = [t for t, n in plan.focus.items() for _ in range(n)]
+    review = list(plan.review)
+    while len(seats) < curriculum.MIXED_SEATS:
+        take = min(len(review), curriculum.MIXED_SEATS - len(seats))
+        seats += rng.sample(review, k=take)
+    rng.shuffle(seats)
+    return seats
 
 
 def _generate_mixed(difficulty: Difficulty, grade: Grade, rng: random.Random):
-    """Sample each of the 10 questions from a randomly chosen topic, with
-    `_MIXED_FRACTION_SEATS` of them kept for fractions where unlocked.
+    """Ten questions whose topics follow the grade's focus chart.
+
+    Each topic gets one factory for the whole quiz, so a topic with two
+    or three seats deals different shapes (a pie, a decimal, a mixed
+    number…) rather than three draws that land on the same one.
 
     Signatures already carry a per-type prefix, so a single `seen` set
     dedupes across types; question text is tracked too as a safety net
     (geometry items live outside the signature system).
     """
-    lo, hi = _difficulty_range(difficulty, grade)
-    # Only mix in topics that are grade-appropriate (a Kindergartener's
-    # "mixed" quiz shouldn't surprise them with long division).
-    pool_types = [t for t in types_available(grade) if t != MathType.mixed]
-    fraction_seats: set[int] = set()
-    fraction_factory = None
-    if MathType.fractions in pool_types:
-        fraction_seats = set(rng.sample(range(10), _MIXED_FRACTION_SEATS))
-        # One rotating deck for the whole quiz, so the fraction questions
-        # are different shapes (a pie, a decimal, a mixed number…), not
-        # three draws that happen to land on the same one.
-        fraction_factory = _pick_factory(MathType.fractions, difficulty, grade)
+    seats = _mixed_seats(grade, rng)
+    factories = {
+        t: _pick_factory(t, difficulty, grade) for t in set(seats) if t != MathType.geometry
+    }
     questions: list[QuestionInternal] = []
     seen_sig: set[tuple] = set()
     seen_text: set[str] = set()
-    for i in range(10):
+    for i, math_type in enumerate(seats):
         figure = None
         for _ in range(_MAX_ATTEMPTS):
-            math_type = MathType.fractions if i in fraction_seats else rng.choice(pool_types)
             if math_type == MathType.geometry:
                 # The generated visual items are a handful against a
                 # static pool of ~80, so give them a fixed share here or
@@ -1590,12 +1928,10 @@ def _generate_mixed(difficulty: Difficulty, grade: Grade, rng: random.Random):
                 figure = item[3] if len(item) > 3 else None
                 signature = ("geo", text)
             else:
-                factory = (
-                    fraction_factory
-                    if math_type == MathType.fractions
-                    else _pick_factory(math_type, difficulty, grade)
+                lo, hi = _number_range(math_type, difficulty, grade)
+                signature, text, answer, explanation, figure = _unpack(
+                    factories[math_type](rng, lo, hi)
                 )
-                signature, text, answer, explanation, figure = _unpack(factory(rng, lo, hi))
             # Dedup by text so a mixed quiz never repeats wording (a
             # visual "how many sides…" appears at most once).
             if signature not in seen_sig and text not in seen_text:

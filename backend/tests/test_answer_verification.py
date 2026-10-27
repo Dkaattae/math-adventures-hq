@@ -95,6 +95,30 @@ def is_reduced(answer) -> bool:
 # Each returns True if it recognised the question (and asserts the
 # answer while it's there). Order matters only where patterns overlap.
 
+def _fraction_division(text, answer) -> bool:
+    """`1/3 ÷ 4 = ? (simplest form)`, `6 ÷ 1/8 = ?`. The app stacks every
+    a/b, so each one is a single number — read left to right as plain
+    text, `6 ÷ 1/8` would be (6 ÷ 1) / 8."""
+    m = re.fullmatch(r"(\d+(?:/\d+)?) ÷ (\d+(?:/\d+)?) = \?( \(simplest form\))?", text)
+    if not m or "/" not in m.group(1) + m.group(2):
+        return False
+    assert Fraction(m.group(1)) / Fraction(m.group(2)) == val(answer), (text, answer)
+    assert is_reduced(answer), (text, answer)
+    return True
+
+
+def _division_with_remainder(text, answer) -> bool:
+    m = re.fullmatch(
+        r"What is (\d+) ÷ (\d+)\? Write it with a remainder \(e\.g\. 5 R 1\)\.", text
+    )
+    if not m:
+        return False
+    a, b = int(m.group(1)), int(m.group(2))
+    assert a % b != 0, f"no remainder to write: {text}"
+    assert str(answer) == f"{a // b} R {a % b}", (text, answer)
+    return True
+
+
 def _plain_expression(text, answer) -> bool:
     """`7 + 5 = ?`, `12 - 4 = ?`, `3 × 4 = ?`, `20 ÷ 5 = ?`,
     `8 + 2 × 3 - 1 = ?`, `(4 + 3) × 2 = ?`, `0.7 + 0.4 = ?` …"""
@@ -272,6 +296,8 @@ def _times_ten(text, answer) -> bool:
 
 
 CHECKERS = [
+    _fraction_division,
+    _division_with_remainder,
     _plain_expression,
     _remainder,
     _division_as_fraction,

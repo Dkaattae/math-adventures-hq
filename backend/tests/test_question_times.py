@@ -113,11 +113,19 @@ def test_comparison_below_grade_three_is_unchanged(grade):
     ],
     ids=lambda t: t.value,
 )
-def test_one_line_arithmetic_still_gets_fifteen_seconds(math_type):
-    """This change was meant to lengthen two topics, not all of them."""
+def test_one_line_arithmetic_gets_fifteen_seconds_up_to_grade_three(math_type):
+    """Facts and small numbers stay quick; grade 4-5 multi-digit work
+    gets longer (and long × and ÷ the longest)."""
     for grade in GRADES:
         for difficulty in DIFFICULTIES:
-            assert question_seconds(SHORT, math_type, difficulty, grade) == 15
+            seconds = question_seconds(SHORT, math_type, difficulty, grade)
+            if grade in (Grade.G4, Grade.G5):
+                assert seconds > 15, (grade, seconds)
+            else:
+                assert seconds == 15, (grade, seconds)
+    assert question_seconds(SHORT, math_type, Difficulty.easy, Grade.G5) >= question_seconds(
+        SHORT, math_type, Difficulty.easy, Grade.G4
+    )
 
 
 # ---------- the bonuses stack on top of the table ----------
@@ -216,8 +224,8 @@ def test_a_word_problem_inside_a_mixed_quiz_keeps_its_own_clock(client, db_sessi
             if internal.topic == MathType.word_problems:
                 assert public["timeLimitSeconds"] >= 30, public
                 seen += 1
-            elif internal.topic == MathType.addition:
-                assert public["timeLimitSeconds"] == 15, public
+            elif internal.topic == MathType.multiplication:
+                assert public["timeLimitSeconds"] == 25, public
     assert seen > 0, "no word problem turned up in a mixed quiz"
 
 

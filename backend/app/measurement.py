@@ -253,10 +253,11 @@ TIERS = {
 }
 
 
-def tier_for(difficulty_is_easy: bool, difficulty_is_hard: bool, g: int) -> str:
-    if g >= 5 or (g >= 4 and not difficulty_is_easy) or (g >= 3 and difficulty_is_hard):
+def tier_for(level: int) -> str:
+    """Tier for a level (curriculum.level: 2 × grade + difficulty)."""
+    if level >= 8:
         return "applied"
-    if g >= 3 or not difficulty_is_easy:
+    if level >= 5:
         return "convert"
     return "basic"
 

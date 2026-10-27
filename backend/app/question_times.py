@@ -78,14 +78,18 @@ class TopicTiming(TypedDict, total=False):
 
 TOPICS: dict[MathType, TopicTiming] = {
     # --- one-line arithmetic: read in a glance, the clock is thinking time ---
-    MathType.addition: {"base": 15},
-    MathType.subtraction: {"base": 15},
-    MathType.multiplication: {"base": 15},
-    MathType.division: {"base": 15},
-    MathType.algebra: {"base": 15},
-    MathType.fractions: {"base": 15},
-    MathType.order_of_operations: {"base": 15},
-    MathType.decimals: {"base": 15},
+    # Grades 4-5 work with multi-digit numbers (curriculum.py's level
+    # ladder: 1248 × 36, 3456 ÷ 24, five-digit sums), which is written
+    # work rather than a fact recalled, so they get more of it. Long
+    # multiplication and division take the longest.
+    MathType.addition: {"base": 15, "by_grade": {"4": 20, "5": 25}},
+    MathType.subtraction: {"base": 15, "by_grade": {"4": 20, "5": 25}},
+    MathType.multiplication: {"base": 15, "by_grade": {"4": 25, "5": 40}},
+    MathType.division: {"base": 15, "by_grade": {"4": 25, "5": 40}},
+    MathType.algebra: {"base": 15, "by_grade": {"4": 20, "5": 25}},
+    MathType.fractions: {"base": 15, "by_grade": {"4": 20, "5": 25}},
+    MathType.order_of_operations: {"base": 15, "by_grade": {"4": 20, "5": 30}},
+    MathType.decimals: {"base": 15, "by_grade": {"4": 20, "5": 30}},
 
     # --- word problems: a scene to read before any maths starts ---
     # 15s was reported as far too fast in play: by the time a kid has read

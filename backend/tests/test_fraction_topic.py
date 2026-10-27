@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import random
 import re
+from math import gcd
 
 import pytest
 
@@ -27,14 +28,14 @@ def _quiz(grade, difficulty, seed=0, **kw):
         (Grade.G2, Difficulty.easy, "pictures"),
         (Grade.G2, Difficulty.medium, "building"),
         (Grade.G2, Difficulty.hard, "building"),
-        (Grade.G3, Difficulty.easy, "pictures"),
+        (Grade.G3, Difficulty.easy, "building"),  # == grade 2 hard
         (Grade.G3, Difficulty.medium, "wholes"),
         (Grade.G4, Difficulty.easy, "wholes"),
         (Grade.G4, Difficulty.medium, "decimals"),
         (Grade.G4, Difficulty.hard, "advanced"),
-        (Grade.G5, Difficulty.easy, "decimals"),
+        (Grade.G5, Difficulty.easy, "advanced"),  # == grade 4 hard
         (Grade.G5, Difficulty.medium, "advanced"),
-        (Grade.G5, Difficulty.hard, "advanced"),
+        (Grade.G5, Difficulty.hard, "mastery"),
     ],
 )
 def test_tier_ladder(grade, difficulty, expected):
@@ -147,14 +148,15 @@ def test_helpers():
 # ---------- fractions in mixed quizzes ----------
 
 
-@pytest.mark.parametrize("grade", [Grade.G2, Grade.G3, Grade.G4, Grade.G5])
+@pytest.mark.parametrize("grade", [Grade.G3, Grade.G4, Grade.G5])
 @pytest.mark.parametrize("difficulty", list(Difficulty))
-def test_mixed_quizzes_keep_three_seats_for_fractions(grade, difficulty):
+def test_mixed_fraction_seats_deal_different_shapes(grade, difficulty):
+    """Fractions are a focus topic from grade 3 (curriculum.GRADE_FOCUS),
+    and their seats share one deck, so they aren't all one shape."""
     for seed in range(15):
         qs = generate_questions(MathType.mixed, difficulty, grade, rng=random.Random(seed))
         fractions = [q for q in qs if q.topic == MathType.fractions]
-        assert len(fractions) >= 3, [q.question for q in qs]
-        # Drawn from one deck, so they aren't three of the same shape.
+        assert len(fractions) >= 2, [q.question for q in qs]
         shapes = {re.sub(r"\d+", "#", q.question) for q in fractions}
         assert len(shapes) >= 2, [q.question for q in fractions]
 
@@ -172,3 +174,37 @@ def test_mixed_quizzes_before_grade_two_have_no_fractions(grade):
     for seed in range(15):
         for q in generate_questions(MathType.mixed, Difficulty.hard, grade, rng=random.Random(seed)):
             assert q.topic != MathType.fractions, q.question
+
+
+# ---------- the numbers a question shows are honest ----------
+
+
+def _all_fraction_questions():
+    for grade in (Grade.G2, Grade.G3, Grade.G4, Grade.G5):
+        for difficulty in Difficulty:
+            for seed in range(25):
+                yield from _quiz(grade, difficulty, seed)
+
+
+def test_no_fraction_question_is_about_zero():
+    """"8/10 - 8/10" asked for zero in simplest form."""
+    for q in _all_fraction_questions():
+        assert str(q.correctAnswer) != "0", q.question
+
+
+def test_multiplied_and_unlike_fractions_start_in_lowest_terms():
+    """"8/16 × 6/11" and "2/6 + 5/8" hid a simpler fraction in the
+    question itself. (Like denominators may show 2/8 + 4/8: same-size
+    slices are the point there.)"""
+    pair = re.compile(r"^(\d+)/(\d+) ([+\-×]) (\d+)/(\d+) = \?")
+    checked = 0
+    for q in _all_fraction_questions():
+        m = pair.match(q.question)
+        if not m:
+            continue
+        n1, d1, _op, n2, d2 = m.groups()
+        if d1 == d2:
+            continue
+        assert gcd(int(n1), int(d1)) == 1 and gcd(int(n2), int(d2)) == 1, q.question
+        checked += 1
+    assert checked > 100

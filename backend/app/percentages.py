@@ -215,10 +215,11 @@ TIERS = {
 }
 
 
-def tier_for(difficulty_is_easy: bool, g: int) -> str:
-    if g >= 5 and not difficulty_is_easy:
+def tier_for(level: int) -> str:
+    """Tier for a level (curriculum.level: 2 × grade + difficulty)."""
+    if level >= 11:
         return "advanced"
-    if g >= 5 or not difficulty_is_easy:
+    if level >= 9:
         return "applied"
     return "basic"
 
