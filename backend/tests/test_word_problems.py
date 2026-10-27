@@ -37,13 +37,13 @@ def _every_question():
     "grade,difficulty,expected",
     [
         (Grade.K, Difficulty.easy, "simple"),
-        (Grade.K, Difficulty.hard, "simple_wide"),   # never a list at K
-        (Grade.G1, Difficulty.easy, "simple"),
+        (Grade.K, Difficulty.hard, "simple"),   # never a list (or groups) at K
+        (Grade.G1, Difficulty.easy, "simple"),  # == K hard
         (Grade.G1, Difficulty.hard, "list"),
         (Grade.G2, Difficulty.easy, "list"),
         (Grade.G2, Difficulty.medium, "list_plus"),
         (Grade.G2, Difficulty.hard, "prices"),
-        (Grade.G3, Difficulty.easy, "list"),
+        (Grade.G3, Difficulty.easy, "prices"),  # == grade 2 hard
         (Grade.G3, Difficulty.medium, "prices"),
         (Grade.G4, Difficulty.hard, "prices"),
         (Grade.G5, Difficulty.easy, "prices"),
@@ -119,7 +119,7 @@ def test_tax_note_is_not_stamped_on_every_price_question():
 def test_list_scenes_show_more_than_the_answer_needs():
     """Even the short scale keeps at least one line the answer ignores."""
     for grade, difficulty, minimum in [
-        (Grade.G2, Difficulty.easy, 3), (Grade.G3, Difficulty.easy, 4)
+        (Grade.G1, Difficulty.hard, 3), (Grade.G2, Difficulty.easy, 3)
     ]:
         for seed in SEEDS:
             for q in _questions(grade, difficulty, seed):
@@ -421,9 +421,9 @@ def test_long_scale_lists_can_carry_a_third_distractor_zone():
 def test_scale_only_changes_the_reading_not_the_tier():
     from app.questions import _reading_scale, _word_problem_tier
 
-    # Same tier at G3 easy and G2 easy-adjacent levels can differ in scale…
-    assert _word_problem_tier(Difficulty.easy, 2) == _word_problem_tier(Difficulty.easy, 3)
-    assert _reading_scale(Difficulty.easy, 2) == "short"
+    # G2 hard and G3 easy are one level, so one tier — but not one scale…
+    assert _word_problem_tier(Difficulty.hard, 2) == _word_problem_tier(Difficulty.easy, 3)
+    assert _reading_scale(Difficulty.hard, 2) == "short"
     assert _reading_scale(Difficulty.easy, 3) == "standard"
     # …and grade 5 splits scale by difficulty without changing maths tier.
     assert _reading_scale(Difficulty.easy, 5) == "standard"

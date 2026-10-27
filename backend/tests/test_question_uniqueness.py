@@ -136,7 +136,7 @@ def test_easy_subtraction_never_produces_negative_results():
                 rng = random.Random(seed)
                 qs = generate_questions(MathType.subtraction, difficulty, grade, rng=rng)
                 for q in qs:
-                    assert int(q.correctAnswer) >= 0, (
+                    assert float(q.correctAnswer) >= 0, (
                         f"negative result leaked into {grade}/{difficulty}: {q.question}"
                     )
     # Grade 4+ with easy/medium difficulty also stays positive.
@@ -146,7 +146,7 @@ def test_easy_subtraction_never_produces_negative_results():
                 rng = random.Random(seed)
                 qs = generate_questions(MathType.subtraction, difficulty, grade, rng=rng)
                 for q in qs:
-                    assert int(q.correctAnswer) >= 0
+                    assert float(q.correctAnswer) >= 0
 
 
 def test_hard_subtraction_grade4plus_can_produce_negatives():
@@ -156,15 +156,17 @@ def test_hard_subtraction_grade4plus_can_produce_negatives():
         for seed in range(50):
             rng = random.Random(seed)
             qs = generate_questions(MathType.subtraction, Difficulty.hard, grade, rng=rng)
-            if any(int(q.correctAnswer) < 0 for q in qs):
+            if any(float(q.correctAnswer) < 0 for q in qs):
                 saw_negative = True
                 break
         assert saw_negative, f"no negative results ever appeared at {grade}/hard"
 
 
 def test_easy_division_always_integer():
-    """Easy division (any grade) must produce plain integer answers, no remainder/fraction/decimal."""
-    for grade in (Grade.K, Grade.G1, Grade.G2, Grade.G3, Grade.G4, Grade.G5):
+    """Easy division up to grade 3 must produce plain integer answers, no
+    remainder/fraction/decimal. (Grade 4 easy is grade 3 hard on the level
+    ladder, so remainders start there.)"""
+    for grade in (Grade.K, Grade.G1, Grade.G2, Grade.G3):
         for seed in range(30):
             rng = random.Random(seed)
             qs = generate_questions(MathType.division, Difficulty.easy, grade, rng=rng)
@@ -355,9 +357,9 @@ def test_algebra_two_step_answers_are_non_negative_integers():
 
 
 def test_fractions_first_tier_always_has_a_picture():
-    """Grade 2-3 easy fractions are for looking at: every question comes
+    """Grade 2 easy fractions are for looking at: every question comes
     with pies, and none of it needs mixed numbers or decimals yet."""
-    for grade in (Grade.G2, Grade.G3):
+    for grade in (Grade.G2,):
         for seed in range(10):
             rng = random.Random(seed)
             qs = generate_questions(MathType.fractions, Difficulty.easy, grade, rng=rng)

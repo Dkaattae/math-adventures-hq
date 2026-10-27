@@ -148,7 +148,7 @@ def test_mixed_quizzes_can_carry_the_new_figures():
 def test_tier_function_matches_the_documented_ladder():
     assert _geometry_tier(Difficulty.easy, Grade.K) == 0
     assert _geometry_tier(Difficulty.medium, Grade.G2) == 1
-    assert _geometry_tier(Difficulty.easy, Grade.G4) == 1
+    assert _geometry_tier(Difficulty.easy, Grade.G4) == 2  # == grade 3 hard
     assert _geometry_tier(Difficulty.medium, Grade.G5) == 2
     assert _geometry_tier(Difficulty.hard, Grade.G3) == 2
 

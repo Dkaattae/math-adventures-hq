@@ -63,7 +63,7 @@ def _comparisons(grade: Grade, difficulty: Difficulty):
         (Grade.G1, Difficulty.hard, "basic"),
         (Grade.G2, Difficulty.easy, "basic"),
         (Grade.G2, Difficulty.medium, "numbers"),
-        (Grade.G3, Difficulty.easy, "sums"),
+        (Grade.G3, Difficulty.easy, "numbers"),   # == grade 2 hard
         (Grade.G3, Difficulty.medium, "sums"),
         (Grade.G3, Difficulty.hard, "operators"),
         (Grade.G4, Difficulty.easy, "operators"),

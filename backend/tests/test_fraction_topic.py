@@ -27,14 +27,14 @@ def _quiz(grade, difficulty, seed=0, **kw):
         (Grade.G2, Difficulty.easy, "pictures"),
         (Grade.G2, Difficulty.medium, "building"),
         (Grade.G2, Difficulty.hard, "building"),
-        (Grade.G3, Difficulty.easy, "pictures"),
+        (Grade.G3, Difficulty.easy, "building"),  # == grade 2 hard
         (Grade.G3, Difficulty.medium, "wholes"),
         (Grade.G4, Difficulty.easy, "wholes"),
         (Grade.G4, Difficulty.medium, "decimals"),
         (Grade.G4, Difficulty.hard, "advanced"),
-        (Grade.G5, Difficulty.easy, "decimals"),
+        (Grade.G5, Difficulty.easy, "advanced"),  # == grade 4 hard
         (Grade.G5, Difficulty.medium, "advanced"),
-        (Grade.G5, Difficulty.hard, "advanced"),
+        (Grade.G5, Difficulty.hard, "mastery"),
     ],
 )
 def test_tier_ladder(grade, difficulty, expected):
@@ -147,14 +147,15 @@ def test_helpers():
 # ---------- fractions in mixed quizzes ----------
 
 
-@pytest.mark.parametrize("grade", [Grade.G2, Grade.G3, Grade.G4, Grade.G5])
+@pytest.mark.parametrize("grade", [Grade.G3, Grade.G4, Grade.G5])
 @pytest.mark.parametrize("difficulty", list(Difficulty))
-def test_mixed_quizzes_keep_three_seats_for_fractions(grade, difficulty):
+def test_mixed_fraction_seats_deal_different_shapes(grade, difficulty):
+    """Fractions are a focus topic from grade 3 (curriculum.GRADE_FOCUS),
+    and their seats share one deck, so they aren't all one shape."""
     for seed in range(15):
         qs = generate_questions(MathType.mixed, difficulty, grade, rng=random.Random(seed))
         fractions = [q for q in qs if q.topic == MathType.fractions]
-        assert len(fractions) >= 3, [q.question for q in qs]
-        # Drawn from one deck, so they aren't three of the same shape.
+        assert len(fractions) >= 2, [q.question for q in qs]
         shapes = {re.sub(r"\d+", "#", q.question) for q in fractions}
         assert len(shapes) >= 2, [q.question for q in fractions]
 

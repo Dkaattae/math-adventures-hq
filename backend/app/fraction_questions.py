@@ -202,6 +202,50 @@ def frac_multiply(rng: random.Random, lo: int, hi: int):
     )
 
 
+def frac_unlike_minus(rng: random.Random, lo: int, hi: int, *, max_den: int = 12):
+    """2/3 - 1/4: unlike slices, taken away."""
+    while True:
+        d1, d2 = rng.randint(2, max_den), rng.randint(2, max_den)
+        if d1 == d2:
+            continue
+        n1, n2 = rng.randint(1, d1 - 1), rng.randint(1, d2 - 1)
+        if Fraction(n1, d1) > Fraction(n2, d2):
+            break
+    lcd = d1 * d2 // gcd(d1, d2)
+    num = n1 * (lcd // d1) - n2 * (lcd // d2)
+    result = simplify(num, lcd)
+    return (
+        ("fracunlikeminus", d1, n1, d2, n2),
+        f"{n1}/{d1} - {n2}/{d2} = ? (simplest form)",
+        result,
+        f"Cut them the same size first. LCD of {d1} and {d2} is {lcd}: "
+        f"{n1}/{d1} = {n1 * (lcd // d1)}/{lcd}, {n2}/{d2} = {n2 * (lcd // d2)}/{lcd}. "
+        f"Take away: {num}/{lcd}" + (f" = {result}" if result != f"{num}/{lcd}" else "") + ". 🍕",
+    )
+
+
+def frac_divide_unit(rng: random.Random, lo: int, hi: int):
+    """Grade 5 division with unit fractions: 1/3 ÷ 4 and 6 ÷ 1/3."""
+    den = rng.randint(2, 9)
+    whole = rng.randint(2, 9)
+    if rng.random() < 0.5:
+        answer = f"1/{den * whole}"
+        return (
+            ("fracdivu", den, whole),
+            f"1/{den} ÷ {whole} = ? (simplest form)",
+            answer,
+            f"Share 1/{den} between {whole}: each gets 1/{whole} of it, "
+            f"and 1/{whole} × 1/{den} = {answer}. 🍕",
+        )
+    return (
+        ("fracdivw", whole, den),
+        f"{whole} ÷ 1/{den} = ?",
+        whole * den,
+        f"How many 1/{den}s fit in {whole}? Each whole holds {den} of them, "
+        f"so {whole} × {den} = {whole * den}. 🍕",
+    )
+
+
 # ---------- reading a picture ----------
 
 
@@ -443,7 +487,7 @@ _COMPARE_YOUNG = ("unit", "same_den")
 _COMPARE_MIDDLE = ("unit", "same_den", "same_num")
 
 TIERS: dict[str, tuple[Callable, ...]] = {
-    # Grade 2-3 easy: every question has a picture to look at.
+    # Grade 2 easy and below: every question has a picture to look at.
     "pictures": (
         frac_shaded,
         partial(frac_compare, modes=_COMPARE_YOUNG, picture=True),
@@ -451,7 +495,8 @@ TIERS: dict[str, tuple[Callable, ...]] = {
         partial(frac_of_whole, picture=True),
         partial(frac_equivalent, picture=True, max_factor=3),
     ),
-    # Grade 2 medium+: the same skills, a little further from the picture.
+    # Grade 2 medium to grade 3 easy: the same skills, a little further
+    # from the picture.
     "building": (
         frac_shaded,
         partial(frac_compare, modes=_COMPARE_MIDDLE, picture=True),
@@ -459,7 +504,7 @@ TIERS: dict[str, tuple[Callable, ...]] = {
         frac_of_whole,
         partial(frac_equivalent, picture=True),
     ),
-    # Grade 3 medium+, grade 4 easy: more than one whole pie.
+    # Grade 3 medium to grade 4 easy: more than one whole pie.
     "wholes": (
         partial(frac_remainder, picture=True),
         partial(frac_to_mixed, picture=True),
@@ -468,7 +513,7 @@ TIERS: dict[str, tuple[Callable, ...]] = {
         frac_equivalent,
         frac_of_whole,
     ),
-    # Grade 4 medium, grade 5 easy: fractions ⇄ decimals, unlike slices.
+    # Grade 4 medium: fractions ⇄ decimals, unlike slices.
     "decimals": (
         partial(frac_to_decimal, picture=True),
         decimal_to_frac,
@@ -478,7 +523,7 @@ TIERS: dict[str, tuple[Callable, ...]] = {
         partial(frac_to_mixed, max_wholes=3, dens=(3, 4, 5, 6, 7, 8)),
         frac_same_denom,
     ),
-    # Grade 4 hard, grade 5 medium+: no pictures, bigger numbers.
+    # Grade 4 hard to grade 5 medium: no pictures, bigger numbers.
     "advanced": (
         frac_unlike_denom,
         frac_multiply,
@@ -488,19 +533,30 @@ TIERS: dict[str, tuple[Callable, ...]] = {
         frac_from_mixed,
         partial(frac_compare, modes=("any",)),
     ),
+    # Grade 5 hard: unlike slices both ways, × and ÷ with fractions.
+    "mastery": (
+        frac_unlike_denom,
+        frac_unlike_minus,
+        frac_multiply,
+        frac_divide_unit,
+        partial(frac_to_decimal, dens=_DEC_DENS_HARD, improper=True),
+        frac_from_mixed,
+    ),
 }
 
 
-def tier_for(difficulty: str, g: int) -> str:
-    """Which fraction tier a grade/difficulty draws from (difficulty is
-    the enum's value: "easy", "medium" or "hard")."""
-    if (g >= 5 and difficulty != "easy") or (g == 4 and difficulty == "hard"):
+def tier_for(level: int) -> str:
+    """Tier for a level (curriculum.level: 2 × grade + difficulty, so
+    grade 3 hard and grade 4 easy share one)."""
+    if level >= 12:
+        return "mastery"
+    if level >= 10:
         return "advanced"
-    if g >= 5 or (g == 4 and difficulty == "medium"):
+    if level >= 9:
         return "decimals"
-    if g == 4 or (g == 3 and difficulty != "easy"):
+    if level >= 7:
         return "wholes"
-    if difficulty != "easy":
+    if level >= 5:
         return "building"
     return "pictures"
 

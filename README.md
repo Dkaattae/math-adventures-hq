@@ -12,15 +12,32 @@ leaderboard.
 - **14 math topics + a Mixed mode**: addition, subtraction,
   multiplication, division, algebra, geometry, fractions, order of
   operations, word problems, comparing numbers, money & time, decimals,
-  percentages, and measurement conversions — plus a 🎲 Mixed option that
-  samples across all of them in one quiz (from grade 2 up, 3 of its 10
-  questions are always fractions).
+  percentages, and measurement conversions — plus a 🎲 Mixed option
+  whose topics follow what each grade actually studies (see below).
 - **Two answer modes**: type the answer, or pick from multiple choice.
   Distractors are generated per question (off-by-one near-misses plus
   same-topic decoys), so multiple choice works for every topic.
-- **Grade & difficulty tiers**: every topic scales with grade (K–5) and
-  difficulty (easy/medium/hard) — e.g. division introduces remainders at
-  grade 3 medium and fractions/decimals at grade 5 hard.
+- **One level ladder across grades**: a grade and difficulty fold into a
+  single level (`2 × grade + difficulty`, 0–12), so neighbouring grades
+  overlap — grade 3 hard *is* grade 4 easy. Each topic sizes its numbers
+  per level: multiplication runs ×2/×5 facts (grade 2) → all facts to
+  10 × 10 (grade 3) → 2-digit × 1-digit → 3-digit × 1-digit (grade 4) →
+  2-digit × 2-digit → 4-digit × 2-digit and decimal × whole (grade 5 hard).
+  Picking a topic on its own always works at its grade's level, so
+  grade-5 addition is five-digit and decimal sums
+  (`backend/app/curriculum.py`).
+- **Mixed quizzes follow a grade focus chart**: most of the 10 seats go to
+  the grade's core topics and the rest to a few review topics; topics a
+  grade has outgrown are left out of its mix:
+
+  | Grade | Focus (seats) | Review (the rest) |
+  |---|---|---|
+  | K | addition 3, subtraction 3, comparing 1 | geometry, word problems |
+  | 1 | addition 3, subtraction 2, word problems 2 | comparing, money & time, geometry |
+  | 2 | addition 2, subtraction 2, money & time 2, word problems 1 | measurement, geometry, fractions, comparing, multiplication |
+  | 3 | multiplication 2, division 2, fractions 2, word problems 1 | geometry, money & time, measurement, comparing, addition, subtraction |
+  | 4 | multiplication 2, division 2, fractions 2, decimals 1 | geometry, measurement, word problems, order of ops, algebra |
+  | 5 | fractions 3, decimals 2, multiplication 1, division 1, order of ops 1 | geometry, algebra, word problems, measurement, percentages |
 - **Word problems that are actually word problems**: instead of "Maya has
   9 apples and gives 2 away", these build a scene that carries facts the
   answer doesn't need. Six question *shapes* — not just six vocabularies
