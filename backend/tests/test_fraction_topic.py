@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import random
 import re
+from math import gcd
 
 import pytest
 
@@ -173,3 +174,37 @@ def test_mixed_quizzes_before_grade_two_have_no_fractions(grade):
     for seed in range(15):
         for q in generate_questions(MathType.mixed, Difficulty.hard, grade, rng=random.Random(seed)):
             assert q.topic != MathType.fractions, q.question
+
+
+# ---------- the numbers a question shows are honest ----------
+
+
+def _all_fraction_questions():
+    for grade in (Grade.G2, Grade.G3, Grade.G4, Grade.G5):
+        for difficulty in Difficulty:
+            for seed in range(25):
+                yield from _quiz(grade, difficulty, seed)
+
+
+def test_no_fraction_question_is_about_zero():
+    """"8/10 - 8/10" asked for zero in simplest form."""
+    for q in _all_fraction_questions():
+        assert str(q.correctAnswer) != "0", q.question
+
+
+def test_multiplied_and_unlike_fractions_start_in_lowest_terms():
+    """"8/16 × 6/11" and "2/6 + 5/8" hid a simpler fraction in the
+    question itself. (Like denominators may show 2/8 + 4/8: same-size
+    slices are the point there.)"""
+    pair = re.compile(r"^(\d+)/(\d+) ([+\-×]) (\d+)/(\d+) = \?")
+    checked = 0
+    for q in _all_fraction_questions():
+        m = pair.match(q.question)
+        if not m:
+            continue
+        n1, d1, _op, n2, d2 = m.groups()
+        if d1 == d2:
+            continue
+        assert gcd(int(n1), int(d1)) == 1 and gcd(int(n2), int(d2)) == 1, q.question
+        checked += 1
+    assert checked > 100

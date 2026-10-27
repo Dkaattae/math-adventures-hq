@@ -131,9 +131,15 @@ def frac_same_denom(rng: random.Random, lo: int, hi: int, *, picture: bool = Fal
     den = rng.randint(2, top)
     a = rng.randint(1, den - 1)
     b = rng.randint(1, den - 1)
-    op = rng.choice(["+", "-"])
-    if op == "-" and b > a:
-        a, b = b, a
+    # Halves only have 1/2 - 1/2 to take away, so they always add.
+    op = rng.choice(["+", "-"]) if den > 2 else "+"
+    if op == "-":
+        # Taking away the whole of what's there leaves nothing to write
+        # in simplest form — "8/10 - 8/10" was a question about zero.
+        while b == a:
+            b = rng.randint(1, den - 1)
+        if b > a:
+            a, b = b, a
     num = a + b if op == "+" else a - b
     result = simplify(num, den)
     hint = f"{a}/{den} {op} {b}/{den} = {num}/{den}" + (
@@ -161,8 +167,9 @@ def frac_unlike_denom(rng: random.Random, lo: int, hi: int, *, picture: bool = F
     d2 = rng.randint(2, max(3, hi // 3))
     if d2 == d1:
         d2 += 1
-    n1 = rng.randint(1, d1 - 1)
-    n2 = rng.randint(1, d2 - 1)
+    # Each fraction is already in lowest terms: "2/6 + 5/8" hides a 1/3.
+    n1 = _coprime_numerator(rng, d1)
+    n2 = _coprime_numerator(rng, d2)
     lcd = d1 * d2 // gcd(d1, d2)
     num = n1 * (lcd // d1) + n2 * (lcd // d2)
     result = simplify(num, lcd)
@@ -185,11 +192,18 @@ def frac_unlike_denom(rng: random.Random, lo: int, hi: int, *, picture: bool = F
     )
 
 
+def _proper_in_lowest_terms(rng: random.Random, hi: int) -> tuple[int, int]:
+    """A proper fraction n/d already in lowest terms ("8/16" isn't)."""
+    while True:
+        n = rng.randint(1, max(2, hi // 3))
+        d = rng.randint(n + 1, max(n + 2, hi // 2 + 1))
+        if gcd(n, d) == 1:
+            return n, d
+
+
 def frac_multiply(rng: random.Random, lo: int, hi: int):
-    n1 = rng.randint(1, max(2, hi // 3))
-    d1 = rng.randint(n1 + 1, max(n1 + 2, hi // 2 + 1))
-    n2 = rng.randint(1, max(2, hi // 3))
-    d2 = rng.randint(n2 + 1, max(n2 + 2, hi // 2 + 1))
+    n1, d1 = _proper_in_lowest_terms(rng, hi)
+    n2, d2 = _proper_in_lowest_terms(rng, hi)
     num, den = n1 * n2, d1 * d2
     result = simplify(num, den)
     return (
@@ -208,7 +222,7 @@ def frac_unlike_minus(rng: random.Random, lo: int, hi: int, *, max_den: int = 12
         d1, d2 = rng.randint(2, max_den), rng.randint(2, max_den)
         if d1 == d2:
             continue
-        n1, n2 = rng.randint(1, d1 - 1), rng.randint(1, d2 - 1)
+        n1, n2 = _coprime_numerator(rng, d1), _coprime_numerator(rng, d2)
         if Fraction(n1, d1) > Fraction(n2, d2):
             break
     lcd = d1 * d2 // gcd(d1, d2)
